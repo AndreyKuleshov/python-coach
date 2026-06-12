@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>python-coach</title>
+    <!-- CodeMirror 5 from CDN: minimal editor, no build step (architect MVP choice). -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js"></script>
+    <!-- marked: render lesson markdown without a backend renderer. -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+    <link rel="stylesheet" href="/static/app.css" />
+  </head>
+  <body>
+    <header>
+      <h1>python-coach <span class="tag">MVP skeleton</span></h1>
+    </header>
+    <main>
+      <section id="lesson">
+        <h2 id="lesson-title">Loading…</h2>
+        <div id="lesson-body" class="markdown"></div>
+      </section>
+
+      <section id="exercise">
+        <h3 id="exercise-title"></h3>
+        <div id="exercise-statement" class="markdown"></div>
+
+        <label for="editor">Your solution</label>
+        <textarea id="editor"></textarea>
+
+        <div class="controls">
+          <button id="check-btn">Check</button>
+          <span id="progress-badge" class="badge"></span>
+        </div>
+
+        <div id="results" class="results hidden">
+          <h4>Results <span id="results-summary"></span></h4>
+          <ul id="results-list"></ul>
+          <pre id="results-error" class="error hidden"></pre>
+        </div>
+      </section>
+    </main>
+    <script src="/static/app.js"></script>
+  </body>
+</html>

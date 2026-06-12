@@ -1,0 +1,22 @@
+# Local-dev Postgres only. The API runs on the host (uvicorn) so it can reach
+# the host Docker daemon to spawn sandbox containers. The sandbox image is built
+# separately (services/sandbox/Dockerfile) and run per-submission by the API.
+services:
+  db:
+    image: postgres:17.2-bookworm
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "${POSTGRES_PORT}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pgdata:

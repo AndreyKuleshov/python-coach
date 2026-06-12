@@ -1,0 +1,58 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "python-coach"
+version = "0.1.0"
+description = "Personal interactive Python learning platform (AQA focus) — backend API + sandboxed pytest runner."
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi>=0.115,<1",
+    "uvicorn>=0.32,<1",
+    "pydantic>=2.9,<3",
+    "pydantic-settings>=2.6,<3",
+    "sqlmodel>=0.0.22,<0.1",
+    "sqlalchemy[asyncio]>=2.0,<3",
+    "asyncpg>=0.30,<1",
+    "alembic>=1.16,<2",
+    "structlog>=24.4,<25",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3,<9",
+    "pytest-asyncio>=0.24,<1",
+    "httpx>=0.27,<1",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/python_coach"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+pythonpath = ["src"]
+# Tests are written as functions; this stops pytest auto-collecting imported
+# domain types named Test* (TestResult, TestRunResult) as test classes.
+python_classes = []
+
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+# Alembic revision files are machine-generated; do not lint/format them.
+extend-exclude = ["src/python_coach/migrations/versions"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "ASYNC"]
+
+[tool.pyright]
+# Generated Alembic revisions reference sqlmodel.sql.* which the stubs don't expose.
+exclude = ["**/migrations/versions"]
+
+# Alembic config lives here (pyproject), not in alembic.ini — see .claude/rules/python.md.
+# Requires Alembic >= 1.16 (native pyproject support).
+[tool.alembic]
+script_location = "src/python_coach/migrations"
+# DB URL is resolved in env.py from app settings — single source of truth.
+prepend_sys_path = ["src"]

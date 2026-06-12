@@ -1,0 +1,59 @@
+# Workspace root — source-less dispatcher.
+# Members live under services/*. Real code/deps live in services/api/pyproject.toml.
+# services/sandbox has no pyproject (Docker-only), so list the API member explicitly.
+[tool.uv.workspace]
+members = ["services/api"]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.8,<1",
+    "pyright>=1.1.390,<2",
+    "import-linter>=2.1,<3",
+]
+
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+src = ["services/api/src"]
+# Alembic revision files are machine-generated; do not lint/format them.
+extend-exclude = ["**/migrations/versions"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "ASYNC"]
+
+[tool.pyright]
+pythonVersion = "3.13"
+typeCheckingMode = "standard"
+include = ["services/api/src"]
+# Generated Alembic revisions reference sqlmodel.sql.* which the stubs don't expose.
+exclude = ["**/migrations/versions"]
+
+# Each API layer is a PEP-420 namespace package (no __init__.py, per python.md),
+# so grimp can't discover them under the regular root package. We therefore list
+# each layer as its own root package and express the direction with `forbidden`
+# contracts (lower layers must never import upper layers — api-layers.md).
+[tool.importlinter]
+root_packages = [
+    "python_coach.transport",
+    "python_coach.controllers",
+    "python_coach.storage",
+    "python_coach.clients",
+]
+
+[[tool.importlinter.contracts]]
+name = "storage must not import upper layers"
+type = "forbidden"
+source_modules = ["python_coach.storage"]
+forbidden_modules = ["python_coach.transport", "python_coach.controllers"]
+
+[[tool.importlinter.contracts]]
+name = "clients must not import upper layers"
+type = "forbidden"
+source_modules = ["python_coach.clients"]
+forbidden_modules = ["python_coach.transport", "python_coach.controllers"]
+
+[[tool.importlinter.contracts]]
+name = "controllers must not import transport (no fastapi-facing layer)"
+type = "forbidden"
+source_modules = ["python_coach.controllers"]
+forbidden_modules = ["python_coach.transport"]

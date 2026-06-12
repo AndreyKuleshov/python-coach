@@ -1,0 +1,48 @@
+{
+  "_PLACEHOLDER": "THROWAWAY FIXTURE — NOT real lesson content. Exists only to prove the submit -> sandbox -> pytest -> result -> progress pipeline end-to-end. The methodist agent authors real lessons via the format in STORAGE_CONTRACT.md. Delete before shipping.",
+  "slug": "placeholder-intro",
+  "title": "[PLACEHOLDER] Pipeline smoke-test lesson",
+  "body_md": "# Placeholder lesson\n\nThis is **not** real content. It only verifies the platform pipeline works. Two trivial exercises follow.",
+  "position": 0,
+  "is_published": false,
+  "exercises": [
+    {
+      "slug": "return-42",
+      "title": "Return 42",
+      "statement_md": "Implement `answer()` so it returns the integer `42`.",
+      "starter_code": "def answer():\n    return 0\n",
+      "solution_module": "solution",
+      "position": 0,
+      "tests": [
+        {
+          "filename": "test_answer.py",
+          "content": "from solution import answer\n\n\ndef test_answer_returns_42():\n    assert answer() == 42\n",
+          "is_hidden": false,
+          "position": 0
+        }
+      ]
+    },
+    {
+      "slug": "add-two",
+      "title": "Add two numbers",
+      "statement_md": "Implement `add(a, b)` returning their sum. Two tests check it.",
+      "starter_code": "def add(a, b):\n    return 0\n",
+      "solution_module": "solution",
+      "position": 1,
+      "tests": [
+        {
+          "filename": "test_add_basic.py",
+          "content": "from solution import add\n\n\ndef test_add_positive():\n    assert add(2, 3) == 5\n",
+          "is_hidden": false,
+          "position": 0
+        },
+        {
+          "filename": "test_add_negative.py",
+          "content": "from solution import add\n\n\ndef test_add_negative():\n    assert add(-1, -1) == -2\n",
+          "is_hidden": true,
+          "position": 1
+        }
+      ]
+    }
+  ]
+}

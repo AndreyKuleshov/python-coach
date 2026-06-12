@@ -17,6 +17,7 @@ venv/
 env/
 .pytest_cache/
 .ruff_cache/
+.grimp_cache/
 .mypy_cache/
 .pyright/
 .coverage

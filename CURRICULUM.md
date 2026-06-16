@@ -27,13 +27,13 @@ lesson's `position` (the integer in the **Pos** column).
 | 2 | `*args` / `**kwargs`, argument forwarding | `args-kwargs` | Y | planned | Wrappers/decorators must forward arbitrary test signatures. |
 | 3 | **Decorators (basics)** | `decorators-basics` | Y, R | **done** | `@pytest.fixture`, `@pytest.mark.*`, timing/retry decorators. |
 | 4 | Decorators with arguments; stacking; `functools.wraps` deep dive | `decorators-advanced` | Y, R | done | `@pytest.mark.parametrize`, custom marks, `@retry(times=3)`. |
-| 5 | `functools` toolkit (`partial`, `lru_cache`, `reduce`) | `functools-toolkit` | Y, R | next | `partial` for building parametrized test callables and clients. |
+| 5 | `functools` toolkit (`partial`, `lru_cache`, `reduce`, `cmp_to_key`) | `functools-toolkit` | Y, R | **done** | `partial` for building parametrized test callables and clients. |
 
 ## Track 2 — Iteration & lazy data (test-data generation)
 
 | Pos | Topic | Lesson slug | Source | Status | AQA connection |
 |----:|-------|-------------|--------|--------|----------------|
-| 6 | Iterators & the iterator protocol | `iterators-protocol` | Y, R | planned | Understanding what pytest iterates over during collection. |
+| 6 | Iterators & the iterator protocol | `iterators-protocol` | Y, R | **next** | Understanding what pytest iterates over during collection. |
 | 7 | Generators & `yield` | `generators` | Y, R | planned | Generator-based fixtures (`yield` for setup/teardown). |
 | 8 | Generator expressions vs comprehensions; `itertools` | `itertools` | Y, R | planned | Building large parametrized test-case streams lazily. |
 
@@ -83,8 +83,10 @@ lesson's `position` (the integer in the **Pos** column).
 - Generators (7) and context managers (9–10) are prerequisites for `yield` fixtures (20).
 - Track 7 is intentionally last: it composes Tracks 1–6 into the learner's target skill.
 
-## Next after the current lesson (`decorators-basics`, pos 3)
+## Next after the current lesson (`functools-toolkit`, pos 5)
 
-`decorators-advanced` (pos 4): decorators **with arguments**, stacking order, and
-a proper `functools.wraps` treatment — the direct enabler for `@retry(times=n)`
-and custom pytest marks.
+`iterators-protocol` (pos 6): the iterator protocol (`__iter__`/`__next__`),
+iterables vs iterators, and `StopIteration` — the foundation for generators
+(pos 7) and `yield` fixtures, and for understanding what pytest walks during
+collection. This also pays off the `functools` lesson's one-shot-iterator point
+(`reduce` over a generator) with the protocol that makes it work.

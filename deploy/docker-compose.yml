@@ -1,6 +1,13 @@
-# Local-dev Postgres only. The API runs on the host (uvicorn) so it can reach
-# the host Docker daemon to spawn sandbox containers. The sandbox image is built
-# separately (services/sandbox/Dockerfile) and run per-submission by the API.
+# Local-dev compose stack. The API runs on the host (uvicorn) so it can reach
+# the host Docker daemon to spawn sandbox containers per-submission.
+#
+# Services:
+#   db      — Postgres; started by `docker compose up -d --wait` (no profile).
+#   sandbox — Image-only build target (profile "build"); never started as a
+#             long-running service. Build via:
+#               docker compose --profile build build sandbox
+#             The resulting tag (python-coach-sandbox:latest) is what the API
+#             passes to `docker run` for each submission.
 services:
   db:
     image: postgres:17.2-bookworm
@@ -17,6 +24,15 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+
+  # sandbox — build-only service; profile "build" prevents `up` from starting it.
+  # The API runs this image per-submission via `docker run`; it is never a daemon.
+  sandbox:
+    build:
+      context: ../services/sandbox
+    image: python-coach-sandbox:latest
+    profiles:
+      - build
 
 volumes:
   pgdata:

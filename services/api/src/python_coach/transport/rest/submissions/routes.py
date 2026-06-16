@@ -9,7 +9,7 @@ from python_coach.controllers.submissions import (
     submit_solution,
 )
 from python_coach.storage.models.submission import Submission, SubmissionStatus
-from python_coach.transport.deps import SandboxDep, StorageDep
+from python_coach.transport.deps import CurrentUserDep, SandboxDep, StorageDep
 
 router = APIRouter(prefix="/api/submissions", tags=["submissions"])
 
@@ -73,12 +73,12 @@ def _to_dto(submission: Submission) -> SubmissionDTO:
 
 @router.post("", response_model=SubmissionDTO)
 async def create_submission(
-    body: SubmitRequest, storage: StorageDep, sandbox: SandboxDep
+    body: SubmitRequest, user: CurrentUserDep, storage: StorageDep, sandbox: SandboxDep
 ) -> SubmissionDTO:
-    """Grade a solution in the sandbox and return the structured verdict."""
+    """Grade a solution in the sandbox (for the current user) and return the verdict."""
     try:
         # Controller takes unpacked primitives, not the DTO instance.
-        outcome = await submit_solution(body.exercise_id, body.code, storage, sandbox)
+        outcome = await submit_solution(user.id or 0, body.exercise_id, body.code, storage, sandbox)
     except ExerciseNotFoundError as exc:
         raise HTTPException(status_code=404, detail="exercise not found") from exc
 
@@ -87,9 +87,11 @@ async def create_submission(
 
 
 @router.get("/{submission_id}", response_model=SubmissionDTO)
-async def read_submission(submission_id: int, storage: StorageDep) -> SubmissionDTO:
-    """Fetch a previously graded submission by id."""
-    submission = await get_submission(submission_id, storage)
+async def read_submission(
+    submission_id: int, user: CurrentUserDep, storage: StorageDep
+) -> SubmissionDTO:
+    """Fetch one of the current user's graded submissions by id."""
+    submission = await get_submission(user.id or 0, submission_id, storage)
     if submission is None:
         raise HTTPException(status_code=404, detail="submission not found")
     return _to_dto(submission)

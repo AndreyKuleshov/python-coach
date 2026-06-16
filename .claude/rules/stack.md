@@ -26,7 +26,17 @@ Treat this list as canon. Adding, removing, or replacing any of these without ex
 | Framework | **FastAPI** |
 | Validation / DTOs | **Pydantic v2** (+ **pydantic-settings** for config) |
 
-Auth is out of scope for the MVP (single-user platform). If added later, keep it custom and minimal — do not pull in a framework unilaterally.
+## Auth
+
+Owner-approved for the auth feature (email + password login, email confirmation, JWT bearer sessions). Keep it custom and minimal — no auth framework.
+
+| Concern | Technology |
+|---|---|
+| Password hashing | **argon2-cffi** (Argon2id) — owner-approved |
+| Session tokens | **PyJWT** (`pyjwt`) — bearer access token, signed HS256 with `JWT_SECRET` (required env, no default), with an expiry. Also used for the short-lived email-confirmation token (purpose-tagged, no token table) — owner-approved |
+| Email delivery | stdlib **smtplib** / **email** run via `asyncio.to_thread` (no extra dependency); falls back to logging the confirmation link via structlog when SMTP is unconfigured |
+
+If `aiosmtplib` is ever adopted in place of stdlib smtplib, add it here first.
 
 ## Database
 

@@ -13,9 +13,11 @@ class SubmissionsMixin:
 
     session: AsyncSession
 
-    async def create_pending_submission(self, exercise_id: int, code: str) -> Submission:
+    async def create_pending_submission(
+        self, user_id: int, exercise_id: int, code: str
+    ) -> Submission:
         """Insert a submission in PENDING state and return it with its id."""
-        submission = Submission(exercise_id=exercise_id, code=code)
+        submission = Submission(user_id=user_id, exercise_id=exercise_id, code=code)
         self.session.add(submission)
         await self.session.flush()
         await self.session.refresh(submission)

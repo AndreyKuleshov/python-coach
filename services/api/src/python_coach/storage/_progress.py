@@ -13,17 +13,21 @@ class ProgressMixin:
 
     session: AsyncSession
 
-    async def get_progress(self, exercise_id: int) -> Progress | None:
-        """Fetch the progress row for an exercise, if any attempt was made."""
-        stmt = select(Progress).where(Progress.exercise_id == exercise_id)
+    async def get_progress(self, user_id: int, exercise_id: int) -> Progress | None:
+        """Fetch the progress row for a (user, exercise), if any attempt was made."""
+        stmt = select(Progress).where(
+            Progress.user_id == user_id, Progress.exercise_id == exercise_id
+        )
         result = await self.session.exec(stmt)
         return result.first()
 
-    async def record_attempt(self, exercise_id: int, submission_id: int, solved: bool) -> Progress:
+    async def record_attempt(
+        self, user_id: int, exercise_id: int, submission_id: int, solved: bool
+    ) -> Progress:
         """Upsert progress after a graded attempt: bump counters, mark solved once."""
-        progress = await self.get_progress(exercise_id)
+        progress = await self.get_progress(user_id, exercise_id)
         if progress is None:
-            progress = Progress(exercise_id=exercise_id)
+            progress = Progress(user_id=user_id, exercise_id=exercise_id)
 
         progress.attempts += 1
         progress.last_submission_id = submission_id

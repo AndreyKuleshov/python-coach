@@ -11,6 +11,7 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from python_coach.transport.rest.auth.routes import router as auth_router
 from python_coach.transport.rest.lessons.routes import router as lessons_router
 from python_coach.transport.rest.progress.routes import router as progress_router
 from python_coach.transport.rest.submissions.routes import router as submissions_router
@@ -35,6 +36,7 @@ def create_app() -> FastAPI:
     _configure_logging()
     app = FastAPI(title="python-coach", version="0.1.0")
 
+    app.include_router(auth_router)
     app.include_router(lessons_router)
     app.include_router(submissions_router)
     app.include_router(progress_router)

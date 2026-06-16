@@ -17,6 +17,7 @@ from sqlmodel import SQLModel
 from python_coach.settings import get_settings
 from python_coach.storage.models import lesson as _lesson  # noqa: F401
 from python_coach.storage.models import submission as _submission  # noqa: F401
+from python_coach.storage.models import user as _user  # noqa: F401
 
 config = context.config
 # Config lives in pyproject.toml, so there is no alembic.ini logging section to

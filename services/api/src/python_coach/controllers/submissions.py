@@ -21,19 +21,20 @@ class ExerciseNotFoundError(Exception):
 
 
 async def submit_solution(
+    user_id: int,
     exercise_id: int,
     code: str,
     storage: Storage,
     sandbox: SandboxClient,
 ) -> GradeOutcome:
-    """Grade user `code` for an exercise in the sandbox and record progress."""
+    """Grade user `code` for an exercise in the sandbox and record per-user progress."""
     exercise = await storage.get_exercise(exercise_id)
     if exercise is None:
         raise ExerciseNotFoundError(exercise_id)
 
     tests = await storage.get_exercise_tests(exercise_id)
 
-    submission = await storage.create_pending_submission(exercise_id, code)
+    submission = await storage.create_pending_submission(user_id, exercise_id, code)
 
     # Run the (possibly hostile) code in the isolated container.
     solution_file = SandboxFile(name=f"{exercise.solution_module}.py", content=code)
@@ -49,7 +50,7 @@ async def submit_solution(
         return GradeOutcome(submission=submission, solved=False)
 
     solved = status == SubmissionStatus.PASSED
-    await storage.record_attempt(exercise_id, submission.id or 0, solved=solved)
+    await storage.record_attempt(user_id, exercise_id, submission.id or 0, solved=solved)
     return GradeOutcome(submission=submission, solved=solved)
 
 
@@ -63,6 +64,9 @@ def _status_from_result(result: TestRunResult) -> SubmissionStatus:
     return SubmissionStatus.PASSED if result.passed else SubmissionStatus.FAILED
 
 
-async def get_submission(submission_id: int, storage: Storage) -> Submission | None:
-    """Fetch a graded submission by id."""
-    return await storage.get_submission(submission_id)
+async def get_submission(user_id: int, submission_id: int, storage: Storage) -> Submission | None:
+    """Fetch a graded submission by id, scoped to its owner (no cross-user reads)."""
+    submission = await storage.get_submission(submission_id)
+    if submission is None or submission.user_id != user_id:
+        return None
+    return submission

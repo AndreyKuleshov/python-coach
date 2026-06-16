@@ -36,6 +36,25 @@ class Settings(BaseSettings):
     # Path to the docker CLI on the host running the API.
     docker_bin: str
 
+    # === Auth (JWT) ===
+    # HS256 signing secret for access + email-confirmation tokens. Required, no default.
+    jwt_secret: str
+    # Access token lifetime in minutes.
+    jwt_access_token_minutes: int
+    # Email-confirmation token lifetime in minutes.
+    jwt_confirm_token_minutes: int
+
+    # === Email (SMTP, optional) ===
+    # When smtp_host is empty the confirmation link is logged (structlog) instead
+    # of sent — usable/testable locally without SMTP creds.
+    smtp_host: str
+    smtp_port: int
+    smtp_user: str
+    smtp_password: str
+    smtp_from: str
+    # Public base URL the confirmation link points at (e.g. http://localhost:8077).
+    public_base_url: str
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:

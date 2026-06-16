@@ -6,7 +6,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 
 from python_coach.controllers.progress import get_progress
-from python_coach.transport.deps import StorageDep
+from python_coach.transport.deps import CurrentUserDep, StorageDep
 
 router = APIRouter(prefix="/api/progress", tags=["progress"])
 
@@ -22,9 +22,9 @@ class ProgressDTO(BaseModel):
 
 
 @router.get("/{exercise_id}", response_model=ProgressDTO)
-async def read_progress(exercise_id: int, storage: StorageDep) -> ProgressDTO:
-    """Return progress for an exercise; zeros when there has been no attempt."""
-    progress = await get_progress(exercise_id, storage)
+async def read_progress(exercise_id: int, user: CurrentUserDep, storage: StorageDep) -> ProgressDTO:
+    """Return the current user's progress for an exercise; zeros if no attempt."""
+    progress = await get_progress(user.id or 0, exercise_id, storage)
     if progress is None:
         return ProgressDTO(
             exercise_id=exercise_id,

@@ -26,8 +26,9 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlmodel import delete, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from fixtures import LocalePageFactory, SeededLesson
+from fixtures import LocalePageFactory, SeededLesson, SeededUser
 from lesson_page import LessonPage
+from python_coach.controllers.security import hash_password, mint_access_token
 from python_coach.settings import get_settings
 from python_coach.storage.models.lesson import (
     Exercise,
@@ -36,6 +37,7 @@ from python_coach.storage.models.lesson import (
     Lesson,
     LessonTranslation,
 )
+from python_coach.storage.models.user import User
 
 
 def _free_port() -> int:
@@ -101,6 +103,39 @@ async def _seed(slug: str) -> int:
         await engine.dispose()
 
 
+async def _seed_user(email: str) -> int:
+    """Insert a pre-confirmed UI test account and return its id."""
+    engine = create_async_engine(get_settings().database_url)
+    maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    try:
+        async with maker() as session:
+            user = User(
+                email=email,
+                password_hash=hash_password("ui-password-123"),
+                is_email_confirmed=True,
+            )
+            session.add(user)
+            await session.commit()
+            await session.refresh(user)
+            return user.id or 0
+    finally:
+        await engine.dispose()
+
+
+async def _unseed_user(email: str) -> None:
+    """Delete the UI test account (cascades to its submissions/progress)."""
+    engine = create_async_engine(get_settings().database_url)
+    maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    try:
+        async with maker() as session:
+            user = (await session.exec(select(User).where(User.email == email))).first()
+            if user is not None:
+                await session.exec(delete(User).where(User.id == user.id))  # type: ignore[arg-type, call-overload]
+                await session.commit()
+    finally:
+        await engine.dispose()
+
+
 async def _unseed(slug: str) -> None:
     """Delete the seeded lesson (cascades to its exercise/tests/submissions)."""
     engine = create_async_engine(get_settings().database_url)
@@ -138,6 +173,25 @@ def seeded_lesson() -> Iterator[SeededLesson]:
         yield SeededLesson(slug=slug, exercise_id=exercise_id)
     finally:
         _run_isolated(_unseed(slug))
+
+
+@pytest.fixture(scope="session")
+def seeded_user() -> Iterator[SeededUser]:
+    """Seed a confirmed UI account once per session, mint a token, remove it after.
+
+    The token is minted directly with the same secret the app verifies against,
+    so the UI flow can be logged in by injecting it into localStorage without
+    clicking through the register/confirm forms (those have their own tests).
+    """
+    worker = os.environ.get("PYTEST_XDIST_WORKER", "main")
+    email = f"qa-ui-user-{worker}-{uuid.uuid4().hex[:12]}@example.com"
+    user_id = _run_isolated(_seed_user(email))
+    settings = get_settings()
+    token = mint_access_token(user_id, settings.jwt_secret, settings.jwt_access_token_minutes).token
+    try:
+        yield SeededUser(email=email, token=token)
+    finally:
+        _run_isolated(_unseed_user(email))
 
 
 @pytest.fixture(scope="session")
@@ -183,9 +237,17 @@ def _wait_until_ready(base_url: str, timeout_s: float = 30.0) -> None:
 
 
 @pytest.fixture
-def lesson_page(page: Page, live_server: str, seeded_lesson: SeededLesson) -> LessonPage:
-    """A LessonPage POM pointed at the seeded lesson on the live server."""
-    return LessonPage(page, base_url=live_server, lesson_slug=seeded_lesson.slug)
+def lesson_page(
+    page: Page, live_server: str, seeded_lesson: SeededLesson, seeded_user: SeededUser
+) -> LessonPage:
+    """A LessonPage POM pointed at the seeded lesson, pre-authenticated.
+
+    Submitting is gated behind login, so the POM seeds the bearer token into
+    localStorage before navigation — the Check button is then enabled.
+    """
+    return LessonPage(
+        page, base_url=live_server, lesson_slug=seeded_lesson.slug, token=seeded_user.token
+    )
 
 
 @pytest.fixture

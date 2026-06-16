@@ -98,7 +98,7 @@ async def network_exercise(
 
 
 async def test_infinite_loop_times_out_without_hanging(
-    client: httpx.AsyncClient, infinite_loop_exercise: SeededExercise
+    auth_client: httpx.AsyncClient, infinite_loop_exercise: SeededExercise
 ) -> None:
     """A `while True` submission returns a structured timeout, not a hung request.
 
@@ -111,7 +111,7 @@ async def test_infinite_loop_times_out_without_hanging(
 
     start = time.monotonic()
     res = await asyncio.wait_for(
-        client.post(
+        auth_client.post(
             "/api/submissions",
             json={"exercise_id": infinite_loop_exercise.exercise_id, "code": _ANY_SOLUTION},
         ),
@@ -129,11 +129,11 @@ async def test_infinite_loop_times_out_without_hanging(
 
 
 async def test_timeout_leaves_no_leaked_container(
-    client: httpx.AsyncClient, infinite_loop_exercise: SeededExercise
+    auth_client: httpx.AsyncClient, infinite_loop_exercise: SeededExercise
 ) -> None:
     """After a timeout, no `pcoach-*` container survives (force-removed by name)."""
     res = await asyncio.wait_for(
-        client.post(
+        auth_client.post(
             "/api/submissions",
             json={"exercise_id": infinite_loop_exercise.exercise_id, "code": _ANY_SOLUTION},
         ),
@@ -148,10 +148,10 @@ async def test_timeout_leaves_no_leaked_container(
 
 
 async def test_network_access_is_denied(
-    client: httpx.AsyncClient, network_exercise: SeededExercise
+    auth_client: httpx.AsyncClient, network_exercise: SeededExercise
 ) -> None:
     """Outbound network from user code fails inside the `--network none` sandbox."""
-    res = await client.post(
+    res = await auth_client.post(
         "/api/submissions",
         json={"exercise_id": network_exercise.exercise_id, "code": _ANY_SOLUTION},
     )

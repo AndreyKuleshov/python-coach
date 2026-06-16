@@ -18,11 +18,13 @@ services/api/                 FastAPI app (uv workspace member)
     app.py                    ASGI entrypoint, routers, static page, logging
     settings.py               pydantic-settings (env-only, frozen)
     transport/                FastAPI routers + DTOs + deps.py (the wiring point)
-      rest/{lessons,submissions,progress}/routes.py
+      rest/{auth,lessons,submissions,progress}/routes.py
+      deps.py                 builds Storage/clients + resolves the current user (JWT)
     controllers/              use-cases; take unpacked primitives; no fastapi import
+      auth.py, security.py    register/confirm/login + Argon2 hashing + JWT helpers
     storage/                  one Storage class, per-domain mixins, SQLModel tables
-      models/{lesson,submission}.py
-    clients/                  SandboxClient (Docker runner) + result dataclasses
+      models/{lesson,submission,user}.py
+    clients/                  SandboxClient (Docker runner) + EmailClient + result dataclasses
     migrations/               Alembic (config in pyproject, no alembic.ini)
     seed.py                   lesson ingest CLI (the methodist's tool)
   static/                     single-page lesson UI (CodeMirror + marked, CDN)
@@ -39,10 +41,35 @@ fastapi. See `.claude/rules/api-layers.md`.
 
 ## DB schema
 
-`lesson` 1—∞ `exercise` 1—∞ `exercise_test`; `submission` and `progress` per
-exercise. Timestamps are `TIMESTAMP WITH TIME ZONE`. `submission.result` is
-JSONB holding the structured pytest verdict. Full field reference:
+`lesson` 1—∞ `exercise` 1—∞ `exercise_test`. `user` 1—∞ `submission` /
+`progress`: both carry a `user_id` FK and progress is unique per
+`(user_id, exercise_id)` (per-account attempt counters + solved flags).
+Timestamps are `TIMESTAMP WITH TIME ZONE`. `submission.result` is JSONB holding
+the structured pytest verdict. Full field reference:
 [`STORAGE_CONTRACT.md`](./STORAGE_CONTRACT.md).
+
+## Authentication & per-user progress
+
+Login is **email + password** with **email confirmation required** before login.
+
+- `POST /api/auth/register {email, password}` — creates an **unconfirmed** user
+  (password hashed with **Argon2id** via `argon2-cffi`) and sends a confirmation
+  link. **If SMTP is not configured (`SMTP_HOST` empty), the link is logged**
+  via structlog (`event=email.confirmation_link`) so you can confirm locally
+  without SMTP creds. Password must be ≥ 8 chars.
+- `GET /api/auth/confirm?token=...` — verifies the link (a short-lived
+  purpose-tagged **JWT**, so there is no token table) and confirms the email;
+  returns a friendly HTML page.
+- `POST /api/auth/login {email, password}` — verifies the Argon2 hash; an
+  unconfirmed account is **403**; a confirmed one gets a **JWT bearer access
+  token** (`{access_token, token_type, expires_at}`).
+- `GET /api/auth/me` — the current user, resolved from `Authorization: Bearer`.
+
+**Protected** (require the bearer token, keyed to the current user):
+`POST /api/submissions`, `GET /api/submissions/{id}`, `GET /api/progress/{id}`.
+**Public:** `GET /api/lessons`, `GET /api/lessons/{slug}`. The frontend stores
+the JWT in `localStorage`, attaches it on submit/progress calls, and gates the
+**Check** button behind login (lesson reading stays open).
 
 ## Code-execution safety (threat model + isolation)
 
@@ -91,6 +118,14 @@ cp deploy/.env.example deploy/.env
 | `SANDBOX_MEMORY_LIMIT` | e.g. `256m` |
 | `SANDBOX_CPU_LIMIT` | e.g. `1.0` |
 | `DOCKER_BIN` | path to docker CLI (`docker`) |
+| `JWT_SECRET` | **required, no default** — HS256 signing secret for access + confirmation tokens |
+| `JWT_ACCESS_TOKEN_MINUTES` | access-token lifetime, e.g. `1440` |
+| `JWT_CONFIRM_TOKEN_MINUTES` | email-confirmation-token lifetime, e.g. `60` |
+| `SMTP_HOST` | SMTP server host; **leave empty to log the confirmation link instead of sending** |
+| `SMTP_PORT` | SMTP port, e.g. `587` |
+| `SMTP_USER` / `SMTP_PASSWORD` | SMTP credentials (blank when `SMTP_HOST` is empty) |
+| `SMTP_FROM` | From address, e.g. `no-reply@example.com` |
+| `PUBLIC_BASE_URL` | base URL the confirmation link points at, e.g. `http://localhost:8077` |
 
 `deploy/.env`: `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` /
 `POSTGRES_PORT` (defaults to `5544` to avoid a host Postgres on 5432).
@@ -106,15 +141,34 @@ make dev           # everything else: Postgres → migrate → sandbox image →
 
 1. **Postgres** via `docker compose up -d --wait` — blocks until the compose
    healthcheck passes (`pg_isready`), so migrations never race the DB.
-2. **Alembic migrations** (`alembic upgrade head`).
+2. **Alembic migrations** (`alembic upgrade head`). Note: the
+   `auth and per-user progress` migration adds the `user` table and a non-null
+   `user_id` FK to `submission`/`progress`; since those pre-auth rows had no
+   owner, the migration **deletes existing `submission`/`progress` rows** (they
+   are throwaway test data). Lessons/exercises/tests are untouched.
 3. **Sandbox Docker image** build.
 4. **Seed** the placeholder lesson (upsert-by-slug — safe to re-run).
 5. **uvicorn** on `:8077` — foreground, keeping the terminal live. (Non-standard
    port to avoid clashing with other local projects; override with
    `make api-run API_PORT=xxxx`.)
 
-Then open `http://127.0.0.1:8077/?lesson=placeholder-intro`, write code, click
-**Check**.
+Then open `http://127.0.0.1:8077/`, **register** (or log in), and open a lesson.
+Reading is public; clicking **Check** requires being logged in.
+
+**Confirming an account without SMTP:** with `SMTP_HOST` empty, the confirmation
+link is logged instead of emailed. Grab it from the server output and open it:
+
+```bash
+# register
+curl -s -X POST http://127.0.0.1:8077/api/auth/register \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"me@example.com","password":"correct horse battery"}'
+# the uvicorn log prints: {"event":"email.confirmation_link","confirm_url":"http://localhost:8077/api/auth/confirm?token=..."}
+# open that confirm_url, then log in:
+curl -s -X POST http://127.0.0.1:8077/api/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"me@example.com","password":"correct horse battery"}'   # -> {"access_token": "...", ...}
+```
 
 To stop: `Ctrl-C` (kills uvicorn), then `make dev-down` to tear down Postgres.
 
@@ -144,7 +198,12 @@ make deploy-down      # stop Postgres
 
 - **Real content.** Hand `STORAGE_CONTRACT.md` to the **methodist agent** to
   author lessons/exercises/tests. The placeholder fixture is throwaway.
-- **Auth / multi-user.** Single-user MVP; no `user_id`, no login.
+- **Auth hardening (next stage).** Implemented now: email+password register,
+  email confirmation, Argon2 hashing, JWT bearer sessions, per-user progress.
+  Deferred: **rate limiting** on register/login/submit, **refresh tokens** (only
+  a single access token today; on expiry the user re-logs in), **password
+  reset**, token revocation/logout-server-side (logout is client-side only),
+  account deletion, and resend-confirmation.
 - **Async grading / queue.** Submissions grade synchronously in-request. Heavy
   use would want a job queue (Redis) + a `PENDING → result` poll flow (the
   schema already has `PENDING` and a `GET /submissions/{id}`).
@@ -159,7 +218,9 @@ make deploy-down      # stop Postgres
 ## Open questions and assumptions
 
 **Assumptions made:**
-1. Single user, no auth — taken from the mandate/stack.
+1. Email+password auth with email confirmation and JWT bearer sessions
+   (owner-approved). Effectively single-owner, but accounts are no longer
+   anonymous; progress is per account.
 2. The API host may talk to the Docker daemon (the API process is trusted; only
    *user code* is untrusted). Acceptable for a single-user personal platform.
 3. Synchronous grading is fine at single-user scale (one container per request).

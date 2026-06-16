@@ -25,6 +25,15 @@ def _client(wall_timeout_seconds: int = 10) -> SandboxClient:
         sandbox_memory_limit="256m",
         sandbox_cpu_limit="1.0",
         docker_bin="docker",
+        jwt_secret="test-secret",
+        jwt_access_token_minutes=60,
+        jwt_confirm_token_minutes=60,
+        smtp_host="",
+        smtp_port=587,
+        smtp_user="",
+        smtp_password="",
+        smtp_from="no-reply@example.com",
+        public_base_url="http://test",
     )
     return SandboxClient(settings)
 

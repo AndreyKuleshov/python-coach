@@ -1,15 +1,15 @@
 """Submission + Progress ORM tables.
 
-A Submission is one attempt at one exercise (the user's code + the structured
-pytest result). Progress is the per-exercise roll-up used to render the UI.
-Single-user MVP: no user_id column yet (see README "NOT implemented").
+A Submission is one attempt by one user at one exercise (the user's code + the
+structured pytest result). Progress is the per-(user, exercise) roll-up used to
+render the UI. Both reference the `user` table by FK — progress is per account.
 """
 
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
 
-from sqlalchemy import Column, DateTime
+from sqlalchemy import Column, DateTime, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Field, SQLModel
 
@@ -40,6 +40,8 @@ class Submission(SQLModel, table=True):
     __tablename__ = "submission"  # type: ignore[assignment]
 
     id: int | None = Field(default=None, primary_key=True)
+    # Deleting a user removes their submissions (cascade).
+    user_id: int = Field(foreign_key="user.id", index=True, ondelete="CASCADE")
     # Re-ingesting a lesson deletes its exercises and (by cascade) their submissions.
     exercise_id: int = Field(foreign_key="exercise.id", index=True, ondelete="CASCADE")
     code: str
@@ -50,13 +52,16 @@ class Submission(SQLModel, table=True):
 
 
 class Progress(SQLModel, table=True):
-    """Per-exercise progress roll-up: solved-or-not plus attempt counters."""
+    """Per-(user, exercise) progress roll-up: solved-or-not plus attempt counters."""
 
     __tablename__ = "progress"  # type: ignore[assignment]
+    # Progress is tracked per account: one row per (user, exercise) pair.
+    __table_args__ = (UniqueConstraint("user_id", "exercise_id", name="uq_progress_user_exercise"),)
 
     id: int | None = Field(default=None, primary_key=True)
-    # One progress row per exercise (single-user MVP).
-    exercise_id: int = Field(foreign_key="exercise.id", index=True, unique=True, ondelete="CASCADE")
+    # Deleting a user removes their progress (cascade).
+    user_id: int = Field(foreign_key="user.id", index=True, ondelete="CASCADE")
+    exercise_id: int = Field(foreign_key="exercise.id", index=True, ondelete="CASCADE")
     is_solved: bool = Field(default=False)
     attempts: int = Field(default=0)
     # SET NULL: a submission can vanish (cascade) while the progress row survives.

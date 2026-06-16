@@ -11,6 +11,11 @@
 // Language switching is instant and client-side in both views: the lesson
 // payload carries both locales, and the list page renders titles from the
 // active locale without a re-fetch.
+//
+// Auth functions live in auth.js (loaded first). Both files share window.Coach.
+
+// Initialise the shared namespace; auth.js may have already created it.
+window.Coach = window.Coach || {};
 
 const params = new URLSearchParams(window.location.search);
 const LESSON_SLUG = params.get("lesson"); // null => list view
@@ -37,6 +42,25 @@ const UI = {
     listHeading: "Lessons",
     backToLessons: "← Back to lessons",
     emptyList: "No lessons published yet.",
+    logIn: "Log in",
+    logOut: "Log out",
+    register: "Register",
+    email: "Email",
+    password: "Password",
+    loginHeading: "Log in",
+    registerHeading: "Register",
+    noAccount: "No account?",
+    haveAccount: "Have an account?",
+    checkYourEmail: "Check your email",
+    confirmPendingText: (e) =>
+      `We sent a confirmation link to ${e}. Open it to activate your account, then log in.`,
+    loginRequired: "Log in to check your solution",
+    loginToCheck: "Log in to check →",
+    invalidCredentials: "Email or password is incorrect.",
+    emailNotConfirmed: "Confirm your email before logging in.",
+    emailTaken: "That email is already registered.",
+    passwordTooShort: "Password must be at least 8 characters.",
+    genericError: "Something went wrong. Try again.",
   },
   ru: {
     editorLabel: "Ваше решение",
@@ -54,6 +78,25 @@ const UI = {
     listHeading: "Уроки",
     backToLessons: "← К списку уроков",
     emptyList: "Уроки ещё не опубликованы.",
+    logIn: "Войти",
+    logOut: "Выйти",
+    register: "Регистрация",
+    email: "Эл. почта",
+    password: "Пароль",
+    loginHeading: "Вход",
+    registerHeading: "Регистрация",
+    noAccount: "Нет аккаунта?",
+    haveAccount: "Уже есть аккаунт?",
+    checkYourEmail: "Проверьте почту",
+    confirmPendingText: (e) =>
+      `Мы отправили ссылку для подтверждения на ${e}. Откройте её, чтобы активировать аккаунт, затем войдите.`,
+    loginRequired: "Войдите, чтобы проверить решение",
+    loginToCheck: "Войдите для проверки →",
+    invalidCredentials: "Неверная почта или пароль.",
+    emailNotConfirmed: "Подтвердите почту перед входом.",
+    emailTaken: "Эта почта уже зарегистрирована.",
+    passwordTooShort: "Пароль должен быть не короче 8 символов.",
+    genericError: "Что-то пошло не так. Попробуйте снова.",
   },
 };
 
@@ -83,6 +126,11 @@ function pick(localized) {
   if (!localized) return "";
   return localized[locale] || localized.en || localized.ru || "";
 }
+
+// Publish the locale getter and lesson slug into the shared namespace so auth.js
+// can read them without importing or relying on implicit access.
+window.Coach.t = t;
+window.Coach.lessonSlug = LESSON_SLUG;
 
 // ── List view ──────────────────────────────────────────────────────────────
 
@@ -197,19 +245,31 @@ function renderProse() {
   if (!btn.disabled) btn.textContent = t().check;
   if (lastResults) renderResults(lastResults);
   renderProgressBadge();
+  renderCheckGate();
 }
 
 async function refreshProgress() {
-  const res = await fetch(`/api/progress/${currentExerciseId}`);
+  // Progress is per-account and protected; only fetch it when logged in.
+  if (!window.Coach.isLoggedIn()) {
+    lastProgress = null;
+    renderProgressBadge();
+    return;
+  }
+  const res = await fetch(`/api/progress/${currentExerciseId}`, {
+    headers: window.Coach.authHeaders(),
+  });
   if (!res.ok) return;
   lastProgress = await res.json();
   renderProgressBadge();
 }
 
 function renderProgressBadge() {
-  if (!lastProgress) return;
-  const p = lastProgress;
   const badge = document.getElementById("progress-badge");
+  if (!window.Coach.isLoggedIn() || !lastProgress) {
+    badge.textContent = "";
+    return;
+  }
+  const p = lastProgress;
   badge.textContent = p.is_solved
     ? t().solved(p.attempts)
     : p.attempts
@@ -217,16 +277,48 @@ function renderProgressBadge() {
       : t().notAttempted;
 }
 
+// Gate the Check button behind login: when logged out, disable it and show a
+// "log in to check" prompt that opens the auth modal.
+function renderCheckGate() {
+  const btn = document.getElementById("check-btn");
+  const prompt = document.getElementById("login-prompt");
+  if (!btn || !prompt) return;
+  // The button label is always the localized "Check"; login state is conveyed
+  // by the disabled attribute + the adjacent login prompt, not by the label.
+  if (btn.textContent !== t().checking) btn.textContent = t().check;
+  if (window.Coach.isLoggedIn()) {
+    btn.disabled = false;
+    btn.removeAttribute("title");
+    prompt.classList.add("hidden");
+    return;
+  }
+  btn.disabled = true;
+  btn.title = t().loginRequired;
+  prompt.textContent = t().loginToCheck;
+  prompt.classList.remove("hidden");
+}
+
 async function check() {
+  // Submitting requires auth: prompt to log in rather than firing a 401.
+  if (!window.Coach.isLoggedIn()) {
+    window.Coach.openAuth();
+    return;
+  }
   const btn = document.getElementById("check-btn");
   btn.disabled = true;
   btn.textContent = t().checking;
   try {
     const res = await fetch("/api/submissions", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...window.Coach.authHeaders() },
       body: JSON.stringify({ exercise_id: currentExerciseId, code: editor.getValue() }),
     });
+    // Token expired/invalid: drop it and ask the user to log in again.
+    if (res.status === 401) {
+      window.Coach.logout();
+      window.Coach.openAuth();
+      return;
+    }
     const data = await res.json();
     renderResults(data);
     await refreshProgress();
@@ -286,6 +378,7 @@ function switchLocale(next) {
   if (!SUPPORTED.includes(next) || next === locale) return;
   locale = next;
   localStorage.setItem(LOCALE_KEY, next);
+  window.Coach.renderAuthChrome();
   // Re-render whichever view is active.
   if (LESSON_SLUG) {
     renderProse();
@@ -294,15 +387,27 @@ function switchLocale(next) {
   }
 }
 
+// Publish lesson-view callbacks for auth.js to call on auth state changes.
+window.Coach.renderCheckGate = renderCheckGate;
+window.Coach.refreshProgress = refreshProgress;
+
 // ── Boot ───────────────────────────────────────────────────────────────────
 
 document.getElementById("check-btn").addEventListener("click", check);
 document.querySelectorAll(".lang-switch button").forEach((b) => {
   b.addEventListener("click", () => switchLocale(b.dataset.locale));
 });
+// Auth event listeners are wired by auth.js (loaded first) — no call needed here.
 
-if (LESSON_SLUG) {
-  loadLesson();
-} else {
-  loadList();
+// Restore session on load: if a token is stored, fetch the user; then render.
+async function boot() {
+  if (window.Coach.isLoggedIn()) await window.Coach.loadCurrentUser();
+  window.Coach.renderAuthChrome();
+  if (LESSON_SLUG) {
+    await loadLesson();
+  } else {
+    await loadList();
+  }
 }
+
+boot();

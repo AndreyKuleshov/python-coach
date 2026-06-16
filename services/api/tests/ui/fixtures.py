@@ -22,6 +22,14 @@ class SeededLesson:
 
 
 @dataclass(frozen=True, slots=True)
+class SeededUser:
+    """A confirmed UI test account + a live bearer token for it."""
+
+    email: str
+    token: str
+
+
+@dataclass(frozen=True, slots=True)
 class LocalePageFactory:
     """Opens a fresh, isolated browser context whose navigator.language is set.
 

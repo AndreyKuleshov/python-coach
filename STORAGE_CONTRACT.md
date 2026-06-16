@@ -77,6 +77,20 @@ API response has no field for either; assertions in the test suite guard this.
 `submission` and `progress` are written by the platform at runtime — **you never
 author those**.
 
+### Runtime-only tables (not content) — `user`, `submission`, `progress`
+
+The platform now has **registered accounts and per-user progress**. A new
+`user` table holds the account (email + Argon2 password hash +
+`is_email_confirmed`). `submission` and `progress` each carry a `user_id` FK,
+and progress is unique per `(user_id, exercise_id)` — every learner gets their
+own attempt counters and solved flags.
+
+**This changes nothing about the content contract.** Lessons, exercises, and
+tests are still authored exactly as described above; they are not owned by a
+user and are shared by all accounts. The ingest format (below) is unchanged. The
+`user`/`submission`/`progress` tables are written by the platform at runtime and
+are never part of a content fixture.
+
 ## How a test's pytest tests are represented
 
 - **One row per pytest file.** An exercise with two test files = two

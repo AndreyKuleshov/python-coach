@@ -38,6 +38,7 @@ from python_coach.storage.models.lesson import (
     Lesson,
     LessonTranslation,
 )
+from python_coach.storage.models.user import User
 
 # Sentinel reference solution seeded on every exercise so the leak tests can
 # assert it never reaches the lesson API.
@@ -95,6 +96,99 @@ async def client() -> AsyncIterator[httpx.AsyncClient]:
     transport = ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
+
+
+@pytest_asyncio.fixture(loop_scope="session")
+async def auth_token(
+    client: httpx.AsyncClient, session_maker: async_sessionmaker[AsyncSession]
+) -> AsyncIterator[str]:
+    """Register a unique user, confirm them directly in the DB, and log in.
+
+    SMTP is unset in tests so the confirmation link is only logged; rather than
+    scrape logs we flip is_email_confirmed straight in the DB (the migration's
+    own fast path), then log in through the real endpoint to obtain a JWT. The
+    user is deleted afterwards so the suite stays order-independent under xdist.
+    """
+    worker = os.environ.get("PYTEST_XDIST_WORKER", "main")
+    email = f"qa-{worker}-{uuid.uuid4().hex[:12]}@example.com"
+    password = "correct horse battery"  # >= 8 chars
+
+    reg = await client.post("/api/auth/register", json={"email": email, "password": password})
+    assert reg.status_code == 201, reg.text
+
+    # Confirm directly in the DB (equivalent to following the logged link).
+    async with session_maker() as session:
+        user = (await session.exec(select(User).where(User.email == email))).first()
+        assert user is not None
+        user.is_email_confirmed = True
+        session.add(user)
+        await session.commit()
+
+    login = await client.post("/api/auth/login", json={"email": email, "password": password})
+    assert login.status_code == 200, login.text
+    token = login.json()["access_token"]
+
+    try:
+        yield token
+    finally:
+        async with session_maker() as session:
+            user = (await session.exec(select(User).where(User.email == email))).first()
+            if user is not None:
+                await session.exec(delete(User).where(User.id == user.id))  # type: ignore[arg-type, call-overload]
+                await session.commit()
+
+
+@pytest_asyncio.fixture(loop_scope="session")
+async def auth_client(auth_token: str) -> AsyncIterator[httpx.AsyncClient]:
+    """An in-process client that sends `Authorization: Bearer <token>` on every request."""
+    transport = ASGITransport(app=app)
+    headers = {"Authorization": f"Bearer {auth_token}"}
+    async with httpx.AsyncClient(
+        transport=transport, base_url="http://test", headers=headers
+    ) as ac:
+        yield ac
+
+
+@pytest_asyncio.fixture(loop_scope="session")
+async def second_auth_client(
+    client: httpx.AsyncClient, session_maker: async_sessionmaker[AsyncSession]
+) -> AsyncIterator[httpx.AsyncClient]:
+    """A second, independent authenticated user — used for cross-user IDOR tests.
+
+    Deliberately separate from `auth_token`/`auth_client` so the two users are
+    distinct DB rows. Worker-unique email keeps this xdist-safe.
+    """
+    worker = os.environ.get("PYTEST_XDIST_WORKER", "main")
+    email = f"qa-b-{worker}-{uuid.uuid4().hex[:12]}@example.com"
+    password = "correct horse battery"
+
+    reg = await client.post("/api/auth/register", json={"email": email, "password": password})
+    assert reg.status_code == 201, reg.text
+
+    async with session_maker() as session:
+        user = (await session.exec(select(User).where(User.email == email))).first()
+        assert user is not None
+        user.is_email_confirmed = True
+        session.add(user)
+        await session.commit()
+
+    login = await client.post("/api/auth/login", json={"email": email, "password": password})
+    assert login.status_code == 200, login.text
+    token = login.json()["access_token"]
+
+    transport = ASGITransport(app=app)
+    headers = {"Authorization": f"Bearer {token}"}
+    try:
+        async with httpx.AsyncClient(
+            transport=transport, base_url="http://test", headers=headers
+        ) as ac:
+            yield ac
+    finally:
+        async with session_maker() as session:
+            user = (await session.exec(select(User).where(User.email == email))).first()
+            if user is not None:
+                await session.exec(delete(User).where(User.id == user.id))  # type: ignore[arg-type, call-overload]
+                await session.commit()
 
 
 @pytest.fixture

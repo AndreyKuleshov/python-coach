@@ -9,9 +9,10 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from python_coach.storage._lessons import LessonsMixin
 from python_coach.storage._progress import ProgressMixin
 from python_coach.storage._submissions import SubmissionsMixin
+from python_coach.storage._users import UsersMixin
 
 
-class Storage(LessonsMixin, SubmissionsMixin, ProgressMixin):
+class Storage(LessonsMixin, SubmissionsMixin, ProgressMixin, UsersMixin):
     """Repository facade owning one AsyncSession for the request lifetime."""
 
     def __init__(self, session: AsyncSession) -> None:

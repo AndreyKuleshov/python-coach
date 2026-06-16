@@ -12,15 +12,24 @@ from playwright.sync_api import Locator, Page, expect
 class LessonPage:
     """Drives the lesson page: load -> type solution -> Check -> read results."""
 
-    def __init__(self, page: Page, base_url: str, lesson_slug: str) -> None:
+    def __init__(
+        self, page: Page, base_url: str, lesson_slug: str, token: str | None = None
+    ) -> None:
         self.page = page
         self._base_url = base_url
         self._lesson_slug = lesson_slug
+        self._token = token
 
     # --- navigation -------------------------------------------------------
 
     def open(self) -> "LessonPage":
         """Navigate to the lesson by slug and wait until the editor is interactive."""
+        # Submitting is gated behind login: seed the bearer token before the app
+        # boots so the Check button is enabled (init script runs pre-navigation).
+        if self._token is not None:
+            self.page.add_init_script(
+                f"window.localStorage.setItem('python-coach.token', '{self._token}');"
+            )
         self.page.goto(f"{self._base_url}/?lesson={self._lesson_slug}")
         # The CodeMirror widget only renders after the exercise loads; waiting on
         # it (not a timeout) removes the navigation/first-interaction race.

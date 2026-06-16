@@ -21,12 +21,20 @@
       </div>
     </header>
     <main>
-      <section id="lesson">
+      <!-- LIST VIEW: shown when there is no ?lesson= query param -->
+      <section id="lesson-list-section" class="hidden">
+        <h2 id="list-heading" data-testid="list-heading">Lessons</h2>
+        <ul id="lesson-list" data-testid="lesson-list" class="lesson-list"></ul>
+      </section>
+
+      <!-- LESSON VIEW: shown when ?lesson=<slug> is present -->
+      <section id="lesson-section" class="hidden">
+        <a id="back-to-lessons" href="/" data-testid="back-to-lessons" class="back-link">← Back to lessons</a>
         <h2 id="lesson-title" data-testid="lesson-title">Loading…</h2>
         <div id="lesson-body" class="markdown" data-testid="lesson-body"></div>
       </section>
 
-      <section id="exercise">
+      <section id="exercise-section" class="hidden">
         <h3 id="exercise-title" data-testid="exercise-title"></h3>
         <div id="exercise-statement" class="markdown" data-testid="exercise-statement"></div>
 

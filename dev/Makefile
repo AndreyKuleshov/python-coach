@@ -18,8 +18,8 @@ dev-up:
 	$(MAKE) -C $(REPO_ROOT) api-migrate
 	@echo "==> [3/5] Building sandbox Docker image..."
 	$(MAKE) -C $(REPO_ROOT) sandbox-build
-	@echo "==> [4/5] Seeding placeholder lesson..."
-	$(MAKE) -C $(REPO_ROOT) api-seed
+	@echo "==> [4/5] Seeding all lessons (upsert — safe to repeat)..."
+	$(MAKE) -C $(REPO_ROOT) api-seed-all
 	@echo "==> [5/5] Starting API (uvicorn on :$(API_PORT))..."
 	$(MAKE) -C $(REPO_ROOT) api-run
 

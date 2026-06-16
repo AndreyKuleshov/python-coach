@@ -38,6 +38,32 @@ class LessonView:
     exercises: list[ExerciseView]
 
 
+@dataclass(frozen=True, slots=True)
+class LessonSummary:
+    """Minimal curriculum entry — just enough for a list row.
+
+    Deliberately excludes body, exercises, tests, and solution_code so the
+    list payload is safe to expose without anti-cheat concerns.
+    """
+
+    slug: str
+    title: dict[str, str]
+    position: int
+
+
+async def list_published_lessons(storage: Storage) -> list[LessonSummary]:
+    """Return lightweight summaries of all published lessons, ordered by position."""
+    lessons = await storage.list_published_lessons()
+    return [
+        LessonSummary(
+            slug=lesson.slug,
+            title=storage.lesson_title(lesson),
+            position=lesson.position,
+        )
+        for lesson in lessons
+    ]
+
+
 async def get_lesson(slug: str, storage: Storage) -> LessonView | None:
     """Load a lesson by slug for rendering; None when it does not exist."""
     lesson = await storage.get_lesson_by_slug(slug)

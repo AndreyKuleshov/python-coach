@@ -79,3 +79,10 @@ button:disabled { opacity: 0.6; cursor: wait; }
 .results li.failed .outcome, .results li.error .outcome { color: var(--fail); }
 .results li .message { display: block; color: var(--fail); white-space: pre-wrap; margin-top: 4px; }
 .error { background: #fff1f0; color: var(--fail); padding: 10px; border-radius: 6px; white-space: pre-wrap; }
+.hidden { display: none; }
+.lesson-list { list-style: none; padding: 0; margin: 0; }
+.lesson-list li { border-bottom: 1px solid var(--border); }
+.lesson-list li a { display: block; padding: 12px 4px; color: #0969da; text-decoration: none; font-size: 16px; }
+.lesson-list li a:hover { text-decoration: underline; }
+.back-link { display: inline-block; margin-bottom: 16px; color: #57606a; font-size: 14px; text-decoration: none; }
+.back-link:hover { text-decoration: underline; }

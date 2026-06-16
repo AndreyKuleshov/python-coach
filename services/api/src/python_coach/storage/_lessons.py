@@ -92,3 +92,18 @@ class LessonsMixin:
         )
         result = await self.session.exec(stmt)
         return list(result.all())
+
+    async def list_published_lessons(self) -> list[Lesson]:
+        """All published lessons ordered by position, with translations eagerly loaded.
+
+        Only loads the lesson-level translations (title); exercises/tests are not
+        fetched — this query is for the curriculum list, not the full lesson view.
+        """
+        stmt = (
+            select(Lesson)
+            .where(Lesson.is_published.is_(True))  # type: ignore[union-attr]
+            .order_by(Lesson.position)  # type: ignore[arg-type]
+            .options(selectinload(Lesson.translations))  # type: ignore[arg-type]
+        )
+        result = await self.session.exec(stmt)
+        return list(result.all())

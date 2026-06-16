@@ -6,7 +6,7 @@ API_DIR := $(REPO_ROOT)/services/api
 # defaults on 8000). Override with `make api-run API_PORT=xxxx`.
 API_PORT ?= 8077
 
-.PHONY: api-install api-run api-migrate api-makemigration api-seed api-test api-lint api-typecheck api-contracts
+.PHONY: api-install api-run api-migrate api-makemigration api-seed api-seed-all api-test api-lint api-typecheck api-contracts
 
 api-install:
 	uv sync
@@ -20,8 +20,15 @@ api-migrate:
 api-makemigration:
 	uv run --directory $(API_DIR) alembic revision --autogenerate -m "$(m)"
 
+# api-seed: placeholder only (is_published:false — does not appear in the list).
 api-seed:
 	uv run --directory $(API_DIR) python -m python_coach.seed $(REPO_ROOT)/fixtures/placeholder_lesson.json
+
+# api-seed-all: upsert every fixture in fixtures/ (placeholder stays is_published:false).
+api-seed-all:
+	uv run --directory $(API_DIR) python -m python_coach.seed $(REPO_ROOT)/fixtures/placeholder_lesson.json
+	uv run --directory $(API_DIR) python -m python_coach.seed $(REPO_ROOT)/fixtures/lesson_decorators_basics.json
+	uv run --directory $(API_DIR) python -m python_coach.seed $(REPO_ROOT)/fixtures/lesson_decorators_advanced.json
 
 api-test:
 	uv run --directory $(API_DIR) pytest

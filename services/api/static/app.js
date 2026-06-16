@@ -1,16 +1,19 @@
 "use strict";
 
-// Minimal single-page lesson UI. Loads ONE fixture lesson by slug (both
-// locales in one payload), renders the first exercise, and wires the
-// submit -> sandbox -> result -> progress flow. The slug is read from
-// ?lesson=, defaulting to the placeholder fixture.
+// Single-page lesson UI.
 //
-// Language switching is instant and client-side: the lesson payload carries
-// both locales, so toggling EN/RU swaps lesson/exercise prose AND the UI
-// chrome strings below with no reload and no re-fetch.
+// Two views share this module:
+//   - LIST VIEW  (no ?lesson= param): fetch /api/lessons and render a
+//     clickable curriculum index. Each item links to ?lesson=<slug>.
+//   - LESSON VIEW (?lesson=<slug>): load that lesson, render prose + the first
+//     exercise, and wire the submit -> sandbox -> result -> progress flow.
+//
+// Language switching is instant and client-side in both views: the lesson
+// payload carries both locales, and the list page renders titles from the
+// active locale without a re-fetch.
 
 const params = new URLSearchParams(window.location.search);
-const LESSON_SLUG = params.get("lesson") || "placeholder-intro";
+const LESSON_SLUG = params.get("lesson"); // null => list view
 
 const SUPPORTED = ["en", "ru"];
 const LOCALE_KEY = "python-coach.locale";
@@ -31,6 +34,9 @@ const UI = {
     solved: (n) => `solved (${n} attempt${n === 1 ? "" : "s"})`,
     notSolved: (n) => `${n} attempt${n === 1 ? "" : "s"}, not solved`,
     runnerError: (msg) => `Runner error: ${msg}`,
+    listHeading: "Lessons",
+    backToLessons: "← Back to lessons",
+    emptyList: "No lessons published yet.",
   },
   ru: {
     editorLabel: "Ваше решение",
@@ -45,14 +51,19 @@ const UI = {
     solved: (n) => `решено (попыток: ${n})`,
     notSolved: (n) => `попыток: ${n}, не решено`,
     runnerError: (msg) => `Ошибка запуска: ${msg}`,
+    listHeading: "Уроки",
+    backToLessons: "← К списку уроков",
+    emptyList: "Уроки ещё не опубликованы.",
   },
 };
 
 let editor = null;
 let currentExerciseId = null;
-let lessonData = null; // the both-locales payload
+let lessonData = null; // the both-locales payload (lesson view only)
 let currentExercise = null; // the both-locales exercise object
 let lastResults = null; // last render payload, so a locale switch re-labels it
+let lastProgress = null;
+let lessonList = null; // cached list payload (list view only)
 let locale = resolveInitialLocale();
 
 // navigator.language wins on first visit; a persisted manual choice wins after.
@@ -67,7 +78,70 @@ function t() {
   return UI[locale];
 }
 
+// Pick a locale from a {en, ru} field, falling back to the other locale.
+function pick(localized) {
+  if (!localized) return "";
+  return localized[locale] || localized.en || localized.ru || "";
+}
+
+// ── List view ──────────────────────────────────────────────────────────────
+
+async function loadList() {
+  const res = await fetch("/api/lessons");
+  if (!res.ok) return;
+  lessonList = await res.json();
+  renderList();
+}
+
+function renderList() {
+  // Show the list section; hide the lesson/exercise sections used by lesson view.
+  document.getElementById("lesson-list-section").classList.remove("hidden");
+  document.getElementById("lesson-section").classList.add("hidden");
+  document.getElementById("exercise-section").classList.add("hidden");
+
+  document.getElementById("list-heading").textContent = t().listHeading;
+
+  const ul = document.getElementById("lesson-list");
+  ul.innerHTML = "";
+
+  // Keep lang-switch buttons in sync on list view too.
+  document.querySelectorAll(".lang-switch button").forEach((b) => {
+    b.classList.toggle("active", b.dataset.locale === locale);
+  });
+  document.documentElement.lang = locale;
+
+  if (!lessonList || !lessonList.length) {
+    const li = document.createElement("li");
+    li.textContent = t().emptyList;
+    ul.appendChild(li);
+    return;
+  }
+
+  for (const lesson of lessonList) {
+    const li = document.createElement("li");
+    li.setAttribute("data-testid", "lesson-list-item");
+    li.setAttribute("data-slug", lesson.slug);
+
+    const a = document.createElement("a");
+    a.href = `/?lesson=${encodeURIComponent(lesson.slug)}`;
+    a.textContent = pick(lesson.title);
+    li.appendChild(a);
+    ul.appendChild(li);
+  }
+}
+
+// ── Lesson view ────────────────────────────────────────────────────────────
+
 async function loadLesson() {
+  // Show lesson/exercise sections; hide the list section.
+  document.getElementById("lesson-list-section").classList.add("hidden");
+  document.getElementById("lesson-section").classList.remove("hidden");
+  document.getElementById("exercise-section").classList.remove("hidden");
+
+  // Wire the back link before the fetch so it is always present.
+  const backLink = document.getElementById("back-to-lessons");
+  if (backLink) backLink.textContent = t().backToLessons;
+
   const res = await fetch(`/api/lessons/${encodeURIComponent(LESSON_SLUG)}`);
   if (!res.ok) {
     document.getElementById("lesson-title").textContent = t().lessonNotFound;
@@ -103,6 +177,9 @@ function renderProse() {
   document.getElementById("editor-label").textContent = t().editorLabel;
   document.getElementById("results-heading").textContent = t().resultsHeading;
 
+  const backLink = document.getElementById("back-to-lessons");
+  if (backLink) backLink.textContent = t().backToLessons;
+
   if (!lessonData) return;
   document.getElementById("lesson-title").textContent = pick(lessonData.title);
   document.getElementById("lesson-body").innerHTML = marked.parse(pick(lessonData.body_md) || "");
@@ -121,14 +198,6 @@ function renderProse() {
   if (lastResults) renderResults(lastResults);
   renderProgressBadge();
 }
-
-// Pick a locale from a {en, ru} field, falling back to the other locale.
-function pick(localized) {
-  if (!localized) return "";
-  return localized[locale] || localized.en || localized.ru || "";
-}
-
-let lastProgress = null;
 
 async function refreshProgress() {
   const res = await fetch(`/api/progress/${currentExerciseId}`);
@@ -211,15 +280,29 @@ function renderResults(data) {
   }
 }
 
+// ── Locale switch ──────────────────────────────────────────────────────────
+
 function switchLocale(next) {
   if (!SUPPORTED.includes(next) || next === locale) return;
   locale = next;
   localStorage.setItem(LOCALE_KEY, next);
-  renderProse();
+  // Re-render whichever view is active.
+  if (LESSON_SLUG) {
+    renderProse();
+  } else {
+    renderList();
+  }
 }
+
+// ── Boot ───────────────────────────────────────────────────────────────────
 
 document.getElementById("check-btn").addEventListener("click", check);
 document.querySelectorAll(".lang-switch button").forEach((b) => {
   b.addEventListener("click", () => switchLocale(b.dataset.locale));
 });
-loadLesson();
+
+if (LESSON_SLUG) {
+  loadLesson();
+} else {
+  loadList();
+}

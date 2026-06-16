@@ -4,6 +4,9 @@ sources/
 # Scratch / draft material
 to_think/
 
+# Playwright test screenshot artifacts
+services/api/tests/ui/screenshot_*.png
+
 # Python
 __pycache__/
 *.py[cod]

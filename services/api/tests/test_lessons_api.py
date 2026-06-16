@@ -1,4 +1,6 @@
-"""API tests for the lesson read endpoint (GET /api/lessons/{slug}).
+"""API tests for lesson read endpoints:
+  - GET /api/lessons        — published lesson list (no body/exercises/tests/solution_code)
+  - GET /api/lessons/{slug} — full lesson with exercises (no test sources/solution_code)
 
 Drives the real app + DB via ASGITransport. The load-bearing assertion here is
 that test sources — visible *and* hidden — never leak to the frontend: the
@@ -11,6 +13,51 @@ import pytest
 from conftest import SeededExercise
 
 pytestmark = [pytest.mark.db]
+
+
+@pytest.mark.smoke
+async def test_list_returns_published_lessons_only(
+    client: httpx.AsyncClient, seed_exercise: SeededExercise
+) -> None:
+    """GET /api/lessons returns only published lessons; unpublished ones are absent."""
+    res = await client.get("/api/lessons")
+
+    assert res.status_code == 200
+    body = res.json()
+    assert isinstance(body, list)
+    # The seeded lesson (is_published=True in conftest) must appear in the list.
+    slugs = [item["slug"] for item in body]
+    assert seed_exercise.lesson_slug in slugs
+
+
+async def test_list_items_carry_bilingual_titles(
+    client: httpx.AsyncClient, seed_exercise: SeededExercise
+) -> None:
+    """Each list item has slug, position, and bilingual title — nothing more."""
+    res = await client.get("/api/lessons")
+
+    assert res.status_code == 200
+    body = res.json()
+    seeded = next(item for item in body if item["slug"] == seed_exercise.lesson_slug)
+
+    assert seeded["title"]["en"] == "QA seeded lesson"
+    assert seeded["title"]["ru"] == "QA урок"
+    assert "position" in seeded
+    # Verify the shape is exactly {slug, title, position} — no extra fields leak.
+    assert set(seeded.keys()) == {"slug", "title", "position"}
+
+
+@pytest.mark.regression
+async def test_list_never_leaks_body_or_exercises(
+    client: httpx.AsyncClient, seed_exercise: SeededExercise
+) -> None:
+    """The list payload must not expose body_md, exercises, tests, or solution_code."""
+    res = await client.get("/api/lessons")
+
+    assert res.status_code == 200
+    raw = res.text
+    for forbidden in ["body_md", "exercises", "solution_code", "starter_code"]:
+        assert forbidden not in raw, f"field '{forbidden}' must not appear in list payload"
 
 
 @pytest.mark.smoke

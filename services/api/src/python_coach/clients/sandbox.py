@@ -13,6 +13,7 @@ in-container runner (services/sandbox/runner/run_tests.py).
 """
 
 import asyncio
+import contextlib
 import json
 import tempfile
 import uuid
@@ -117,7 +118,11 @@ class SandboxClient:
                 # Killing the CLI process does NOT stop the container; remove it
                 # by name so a `while True: pass` submission cannot survive.
                 await self._force_remove(container)
-                proc.kill()
+                # The container teardown may already have reaped the host
+                # `docker run` CLI process; kill() then raises ProcessLookupError.
+                # run() must never raise on a timeout, so swallow that race.
+                with contextlib.suppress(ProcessLookupError):
+                    proc.kill()
                 await proc.wait()
                 return self._runner_error(
                     f"execution exceeded {s.sandbox_wall_timeout_seconds}s wall-clock limit"

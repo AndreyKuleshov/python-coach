@@ -1,0 +1,157 @@
+"""Fixtures for the Playwright lesson-page tests.
+
+Unlike the API tests (which drive the app in-process over ASGITransport), the UI
+tests need a *real* browser hitting a *real* server, so this conftest:
+
+- boots a uvicorn server on an ephemeral port for the whole session,
+- seeds a lesson (passing + failing exercise) reachable by slug, torn down after,
+- exposes a `LessonPage` page-object the scenarios act through.
+
+Submissions made from the page run the real Docker sandbox, end to end.
+"""
+
+import asyncio
+import os
+import socket
+import subprocess
+import time
+import uuid
+from collections.abc import Iterator
+from dataclasses import dataclass
+
+import httpx
+import pytest
+from playwright.sync_api import Page
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlmodel import delete, select
+from sqlmodel.ext.asyncio.session import AsyncSession
+
+from lesson_page import LessonPage
+from python_coach.settings import get_settings
+from python_coach.storage.models.lesson import Exercise, ExerciseTest, Lesson
+
+
+@dataclass(frozen=True, slots=True)
+class SeededLesson:
+    """Slug + exercise id of the lesson seeded for the UI flow."""
+
+    slug: str
+    exercise_id: int
+
+
+def _free_port() -> int:
+    """Grab an unused TCP port for the throwaway uvicorn server."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
+async def _seed(slug: str) -> int:
+    """Insert a one-exercise lesson (answer() == 42) and return the exercise id."""
+    engine = create_async_engine(get_settings().database_url)
+    maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    try:
+        async with maker() as session:
+            lesson = Lesson(slug=slug, title="UI seeded lesson", body_md="# ui", is_published=True)
+            session.add(lesson)
+            await session.flush()
+            exercise = Exercise(
+                lesson_id=lesson.id or 0,
+                slug=f"{slug}-ex",
+                title="Return 42",
+                statement_md="Implement `answer()` to return 42.",
+                starter_code="def answer():\n    return 0\n",
+                solution_module="solution",
+            )
+            session.add(exercise)
+            await session.flush()
+            test_src = (
+                "from solution import answer\n\n\n"
+                "def test_answer_returns_42():\n"
+                "    assert answer() == 42, 'answer() must return 42'\n"
+            )
+            session.add(
+                ExerciseTest(
+                    exercise_id=exercise.id or 0,
+                    filename="test_answer.py",
+                    content=test_src,
+                )
+            )
+            await session.commit()
+            return exercise.id or 0
+    finally:
+        await engine.dispose()
+
+
+async def _unseed(slug: str) -> None:
+    """Delete the seeded lesson (cascades to its exercise/tests/submissions)."""
+    engine = create_async_engine(get_settings().database_url)
+    maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    try:
+        async with maker() as session:
+            lesson = (await session.exec(select(Lesson).where(Lesson.slug == slug))).first()
+            if lesson is not None:
+                await session.exec(delete(Lesson).where(Lesson.id == lesson.id))  # type: ignore[arg-type, call-overload]
+                await session.commit()
+    finally:
+        await engine.dispose()
+
+
+@pytest.fixture(scope="session")
+def seeded_lesson() -> Iterator[SeededLesson]:
+    """Seed a UI lesson once per session and remove it afterwards."""
+    worker = os.environ.get("PYTEST_XDIST_WORKER", "main")
+    slug = f"qa-ui-{worker}-{uuid.uuid4().hex[:12]}"
+    exercise_id = asyncio.run(_seed(slug))
+    try:
+        yield SeededLesson(slug=slug, exercise_id=exercise_id)
+    finally:
+        asyncio.run(_unseed(slug))
+
+
+@pytest.fixture(scope="session")
+def live_server() -> Iterator[str]:
+    """Run uvicorn on an ephemeral port for the session; yield its base URL."""
+    port = _free_port()
+    base_url = f"http://127.0.0.1:{port}"
+    api_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+    cmd = [
+        "uv",
+        "run",
+        "uvicorn",
+        "python_coach.app:app",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        str(port),
+    ]
+    proc = subprocess.Popen(cmd, cwd=api_dir)
+    try:
+        _wait_until_ready(base_url)
+        yield base_url
+    finally:
+        proc.terminate()
+        try:
+            proc.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+
+
+def _wait_until_ready(base_url: str, timeout_s: float = 30.0) -> None:
+    """Poll /healthz until the server answers or the cold-start budget runs out."""
+    deadline = time.monotonic() + timeout_s
+    last_err: Exception | None = None
+    while time.monotonic() < deadline:
+        try:
+            if httpx.get(f"{base_url}/healthz", timeout=2).status_code == 200:
+                return
+        except httpx.HTTPError as err:  # server not up yet
+            last_err = err
+        time.sleep(0.25)
+    raise RuntimeError(f"live server did not become ready at {base_url}: {last_err}")
+
+
+@pytest.fixture
+def lesson_page(page: Page, live_server: str, seeded_lesson: SeededLesson) -> LessonPage:
+    """A LessonPage POM pointed at the seeded lesson on the live server."""
+    return LessonPage(page, base_url=live_server, lesson_slug=seeded_lesson.slug)

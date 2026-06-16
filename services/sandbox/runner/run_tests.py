@@ -34,7 +34,12 @@ class _Collector:
         """Record the call-phase report (plus setup/teardown errors) per test."""
         # 'call' is the test body; setup/teardown only matter when they error.
         if report.when == "call" or (report.when in {"setup", "teardown"} and report.failed):
-            outcome = "passed" if report.passed else ("error" if report.when != "call" else "failed")
+            if report.passed:
+                outcome = "passed"
+            elif report.when != "call":
+                outcome = "error"
+            else:
+                outcome = "failed"
             message = "" if report.passed else _shorten(str(report.longrepr))
             self.tests.append(
                 {

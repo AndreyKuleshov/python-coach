@@ -16,7 +16,7 @@ from python_coach.transport.rest.progress.routes import router as progress_route
 from python_coach.transport.rest.submissions.routes import router as submissions_router
 
 # static/ ships the single-page lesson UI; resolved relative to the installed package.
-_STATIC_DIR = Path(__file__).resolve().parents[3] / "static"
+_STATIC_DIR = Path(__file__).resolve().parents[2] / "static"
 
 
 def _configure_logging() -> None:

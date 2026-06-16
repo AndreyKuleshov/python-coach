@@ -87,10 +87,13 @@ function renderResults(data) {
   for (const t of data.tests || []) {
     const li = document.createElement("li");
     li.className = t.outcome;
+    li.setAttribute("data-testid", "result-item");
+    li.setAttribute("data-outcome", t.outcome);
     // Build via DOM, not innerHTML: t.name is a pytest nodeid from user-named
     // files and must not be interpreted as HTML (XSS).
     const outcome = document.createElement("span");
     outcome.className = "outcome";
+    outcome.setAttribute("data-testid", "result-outcome");
     outcome.textContent = t.outcome.toUpperCase();
     li.appendChild(outcome);
     li.appendChild(document.createTextNode(t.name));

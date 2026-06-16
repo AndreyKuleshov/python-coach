@@ -18,26 +18,26 @@
     </header>
     <main>
       <section id="lesson">
-        <h2 id="lesson-title">Loading…</h2>
-        <div id="lesson-body" class="markdown"></div>
+        <h2 id="lesson-title" data-testid="lesson-title">Loading…</h2>
+        <div id="lesson-body" class="markdown" data-testid="lesson-body"></div>
       </section>
 
       <section id="exercise">
-        <h3 id="exercise-title"></h3>
-        <div id="exercise-statement" class="markdown"></div>
+        <h3 id="exercise-title" data-testid="exercise-title"></h3>
+        <div id="exercise-statement" class="markdown" data-testid="exercise-statement"></div>
 
         <label for="editor">Your solution</label>
         <textarea id="editor"></textarea>
 
         <div class="controls">
-          <button id="check-btn">Check</button>
-          <span id="progress-badge" class="badge"></span>
+          <button id="check-btn" data-testid="check-btn">Check</button>
+          <span id="progress-badge" class="badge" data-testid="progress-badge"></span>
         </div>
 
-        <div id="results" class="results hidden">
-          <h4>Results <span id="results-summary"></span></h4>
-          <ul id="results-list"></ul>
-          <pre id="results-error" class="error hidden"></pre>
+        <div id="results" class="results hidden" data-testid="results-panel">
+          <h4>Results <span id="results-summary" data-testid="results-summary"></span></h4>
+          <ul id="results-list" data-testid="results-list"></ul>
+          <pre id="results-error" class="error hidden" data-testid="results-error"></pre>
         </div>
       </section>
     </main>

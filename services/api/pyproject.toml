@@ -23,7 +23,10 @@ dependencies = [
 dev = [
     "pytest>=8.3,<9",
     "pytest-asyncio>=0.24,<1",
+    "pytest-xdist>=3.6,<4",
     "httpx>=0.27,<1",
+    "playwright>=1.48,<2",
+    "pytest-playwright>=0.5,<1",
 ]
 
 [tool.hatch.build.targets.wheel]
@@ -31,11 +34,23 @@ packages = ["src/python_coach"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+# One event loop for the whole session: the app's DB engine is a process-global
+# lazily bound to the first loop it sees; a per-test loop would close those
+# pooled asyncpg connections out from under it ("Event loop is closed").
+asyncio_default_test_loop_scope = "session"
 testpaths = ["tests"]
 pythonpath = ["src"]
 # Tests are written as functions; this stops pytest auto-collecting imported
 # domain types named Test* (TestResult, TestRunResult) as test classes.
 python_classes = []
+markers = [
+    "smoke: fast happy-path checks of the core flow",
+    "regression: guards against previously-seen or contract-defined behaviour",
+    "security: sandbox isolation regressions — the platform's #1 risk (timeout, no network, no leaked containers)",
+    "db: requires a running Postgres (driven via ASGITransport against the real app)",
+    "sandbox: requires a built sandbox image + a working Docker daemon",
+    "ui: Playwright lesson-page tests against a live uvicorn server",
+]
 
 [tool.ruff]
 target-version = "py313"
@@ -45,6 +60,12 @@ extend-exclude = ["src/python_coach/migrations/versions"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "ASYNC"]
+
+[tool.ruff.lint.isort]
+# Local test-helper modules (conftest, the UI page object) are imported by bare
+# name under pytest's rootdir insertion; tell isort they are first-party so the
+# import blocks order deterministically.
+known-first-party = ["python_coach", "conftest", "lesson_page"]
 
 [tool.pyright]
 # Generated Alembic revisions reference sqlmodel.sql.* which the stubs don't expose.

@@ -24,7 +24,11 @@ select = ["E", "F", "I", "UP", "B", "ASYNC"]
 [tool.pyright]
 pythonVersion = "3.13"
 typeCheckingMode = "standard"
-include = ["services/api/src"]
+include = ["services/api/src", "services/api/tests"]
+# Bare-name test helpers (conftest, lesson_page) are imported under pytest's
+# rootdir/`pythonpath` insertion; mirror that here so pyright resolves them and
+# the playwright/pytest dev deps the UI tests import (synced via the dev group).
+extraPaths = ["services/api/src", "services/api/tests", "services/api/tests/ui"]
 # Generated Alembic revisions reference sqlmodel.sql.* which the stubs don't expose.
 exclude = ["**/migrations/versions"]
 

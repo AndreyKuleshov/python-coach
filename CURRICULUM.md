@@ -41,16 +41,16 @@ lesson's `position` (the integer in the **Pos** column).
 
 | Pos | Topic | Lesson slug | Source | Status | AQA connection |
 |----:|-------|-------------|--------|--------|----------------|
-| 9 | Context managers (`with`, `__enter__`/`__exit__`) | `context-managers` | Y, R | planned | Deterministic resource setup/teardown in tests. |
-| 10 | `contextlib` (`@contextmanager`, `ExitStack`, `suppress`) | `contextlib` | Y, R | planned | `pytest.raises` is a context manager; building reusable test scaffolds. |
+| 9 | Context managers (`with`, `__enter__`/`__exit__`) | `context-managers` | Y, R | **done** | Deterministic resource setup/teardown in tests. |
+| 10 | `contextlib` (`@contextmanager`, `ExitStack`, `suppress`) | `contextlib` | Y, R | **done** | `pytest.raises` is a context manager; building reusable test scaffolds. |
 
 ## Track 4 — Data modelling & correctness
 
 | Pos | Topic | Lesson slug | Source | Status | AQA connection |
 |----:|-------|-------------|--------|--------|----------------|
-| 11 | Comprehensions & unpacking patterns | `comprehensions` | Y, R | planned | Concise assertions and test-data shaping. |
-| 12 | Dataclasses & `__eq__`/`__repr__` | `dataclasses` | R | planned | Value objects make `assert a == b` failures readable. |
-| 13 | Type hints & `typing` for tests | `type-hints` | R | planned | Typed fixtures/factories catch wiring bugs before runtime. |
+| 11 | Comprehensions & unpacking patterns | `comprehensions` | Y, R | **done** | Concise assertions and test-data shaping. |
+| 12 | Dataclasses & `__eq__`/`__repr__` | `dataclasses` | R | **done** | Value objects make `assert a == b` failures readable. |
+| 13 | Type hints & `typing` for tests | `type-hints` | R | **done** | Typed fixtures/factories catch wiring bugs before runtime. |
 | 14 | Exceptions, custom exception types, `raise ... from` | `exceptions` | Y, R | planned | Asserting on error type/message; negative testing. |
 
 ## Track 5 — Objects & protocols (advanced)
@@ -85,10 +85,10 @@ lesson's `position` (the integer in the **Pos** column).
 
 ## Progress
 
-Done (8): pos 1 `functions-first-class`, 2 `args-kwargs`, 3 `decorators-basics`,
-4 `decorators-advanced`, 5 `functools-toolkit`, 6 `iterators-protocol`,
-7 `generators`, 8 `itertools`.
+Done (13): pos 1–13 — `functions-first-class`, `args-kwargs`,
+`decorators-basics`, `decorators-advanced`, `functools-toolkit`,
+`iterators-protocol`, `generators`, `itertools`, `context-managers`,
+`contextlib`, `comprehensions`, `dataclasses`, `type-hints`.
 
-Next: Track 3 — pos 9 `context-managers`, pos 10 `contextlib` — then Tracks 4–7
-(pos 11–23). Context managers build on generators (pos 7) and feed `yield`
-fixtures (pos 20).
+Next: pos 14 `exceptions`, then Track 5 (15–17 objects/protocols),
+Track 6 (18–19 concurrency/mocking), Track 7 (20–23 pytest capstone).

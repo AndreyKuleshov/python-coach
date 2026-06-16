@@ -1,16 +1,29 @@
 {
-  "_PLACEHOLDER": "THROWAWAY FIXTURE — NOT real lesson content. Exists only to prove the submit -> sandbox -> pytest -> result -> progress pipeline end-to-end. The methodist agent authors real lessons via the format in STORAGE_CONTRACT.md. Delete before shipping.",
+  "_PLACEHOLDER": "THROWAWAY FIXTURE — NOT real lesson content. Exists only to prove the submit -> sandbox -> pytest -> result -> progress pipeline and the bilingual (en/ru) + solution_code storage end-to-end. The methodist agent authors real lessons via the format in STORAGE_CONTRACT.md. Delete before shipping.",
   "slug": "placeholder-intro",
-  "title": "[PLACEHOLDER] Pipeline smoke-test lesson",
-  "body_md": "# Placeholder lesson\n\nThis is **not** real content. It only verifies the platform pipeline works. Two trivial exercises follow.",
+  "title": {
+    "en": "[PLACEHOLDER] Pipeline smoke-test lesson",
+    "ru": "[ЗАГЛУШКА] Урок для проверки пайплайна"
+  },
+  "body_md": {
+    "en": "# Placeholder lesson\n\nThis is **not** real content. It only verifies the platform pipeline works. Two trivial exercises follow.",
+    "ru": "# Урок-заглушка\n\nЭто **не** настоящий контент. Он лишь проверяет работу пайплайна платформы. Ниже два простых задания."
+  },
   "position": 0,
   "is_published": false,
   "exercises": [
     {
       "slug": "return-42",
-      "title": "Return 42",
-      "statement_md": "Implement `answer()` so it returns the integer `42`.",
+      "title": {
+        "en": "Return 42",
+        "ru": "Верните 42"
+      },
+      "statement_md": {
+        "en": "Implement `answer()` so it returns the integer `42`.",
+        "ru": "Реализуйте `answer()`, чтобы он возвращал целое число `42`."
+      },
       "starter_code": "def answer():\n    return 0\n",
+      "solution_code": "def answer():\n    return 42\n",
       "solution_module": "solution",
       "position": 0,
       "tests": [
@@ -24,9 +37,16 @@
     },
     {
       "slug": "add-two",
-      "title": "Add two numbers",
-      "statement_md": "Implement `add(a, b)` returning their sum. Two tests check it.",
+      "title": {
+        "en": "Add two numbers",
+        "ru": "Сложите два числа"
+      },
+      "statement_md": {
+        "en": "Implement `add(a, b)` returning their sum. Two tests check it.",
+        "ru": "Реализуйте `add(a, b)`, возвращающий их сумму. Проверяют два теста."
+      },
       "starter_code": "def add(a, b):\n    return 0\n",
+      "solution_code": "def add(a, b):\n    return a + b\n",
       "solution_module": "solution",
       "position": 1,
       "tests": [

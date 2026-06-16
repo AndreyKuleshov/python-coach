@@ -15,6 +15,10 @@
   <body>
     <header>
       <h1>python-coach <span class="tag">MVP skeleton</span></h1>
+      <div class="lang-switch" data-testid="lang-switch">
+        <button type="button" data-testid="lang-en" data-locale="en">EN</button>
+        <button type="button" data-testid="lang-ru" data-locale="ru">RU</button>
+      </div>
     </header>
     <main>
       <section id="lesson">
@@ -26,7 +30,7 @@
         <h3 id="exercise-title" data-testid="exercise-title"></h3>
         <div id="exercise-statement" class="markdown" data-testid="exercise-statement"></div>
 
-        <label for="editor">Your solution</label>
+        <label for="editor" id="editor-label" data-testid="editor-label">Your solution</label>
         <textarea id="editor"></textarea>
 
         <div class="controls">
@@ -35,7 +39,7 @@
         </div>
 
         <div id="results" class="results hidden" data-testid="results-panel">
-          <h4>Results <span id="results-summary" data-testid="results-summary"></span></h4>
+          <h4><span id="results-heading" data-testid="results-heading">Results</span> <span id="results-summary" data-testid="results-summary"></span></h4>
           <ul id="results-list" data-testid="results-list"></ul>
           <pre id="results-error" class="error hidden" data-testid="results-error"></pre>
         </div>

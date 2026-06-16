@@ -31,7 +31,17 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from python_coach.app import app
 from python_coach.settings import get_settings
 from python_coach.storage.db import get_session
-from python_coach.storage.models.lesson import Exercise, ExerciseTest, Lesson
+from python_coach.storage.models.lesson import (
+    Exercise,
+    ExerciseTest,
+    ExerciseTranslation,
+    Lesson,
+    LessonTranslation,
+)
+
+# Sentinel reference solution seeded on every exercise so the leak tests can
+# assert it never reaches the lesson API.
+SEEDED_SOLUTION_CODE = "def answer():\n    return 42  # SECRET_REFERENCE_SOLUTION\n"
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,6 +54,7 @@ class SeededExercise:
     exercise_slug: str
     visible_test_filename: str
     hidden_test_filename: str
+    solution_code: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -127,17 +138,35 @@ async def seed_exercise(
 
 
 def _build_rows(slug: str, tests: list[TestSpec]) -> tuple[Lesson, Exercise, list[ExerciseTest]]:
-    """Build the ORM objects for a one-exercise lesson (not yet persisted)."""
-    lesson = Lesson(slug=slug, title="QA seeded lesson", body_md="# seeded", is_published=True)
+    """Build the ORM objects for a one-exercise lesson (not yet persisted).
+
+    Translations are attached via the relationship (FK filled by SQLAlchemy on
+    flush), so we do not pass lesson_id/exercise_id to the translation rows.
+    """
+    lesson = Lesson(slug=slug, is_published=True)
+    lesson.translations = [
+        LessonTranslation(lesson_id=0, locale="en", title="QA seeded lesson", body_md="# seeded"),
+        LessonTranslation(lesson_id=0, locale="ru", title="QA урок", body_md="# посев"),
+    ]
     exercise = Exercise(
         lesson_id=0,
         slug=f"{slug}-ex",
-        title="QA exercise",
-        statement_md="Return 42 from `answer()`.",
         starter_code="def answer():\n    return 0\n",
+        solution_code=SEEDED_SOLUTION_CODE,
         solution_module="solution",
         position=0,
     )
+    exercise.translations = [
+        ExerciseTranslation(
+            exercise_id=0,
+            locale="en",
+            title="QA exercise",
+            statement_md="Return 42 from `answer()`.",
+        ),
+        ExerciseTranslation(
+            exercise_id=0, locale="ru", title="QA задача", statement_md="Верните 42 из `answer()`."
+        ),
+    ]
     rows = [
         ExerciseTest(
             exercise_id=0,
@@ -185,6 +214,7 @@ class _SeedContext:
                 exercise_slug=exercise.slug,
                 visible_test_filename=visible.filename,
                 hidden_test_filename=hidden.filename,
+                solution_code=SEEDED_SOLUTION_CODE,
             )
 
     async def __aexit__(self, *_exc: object) -> None:

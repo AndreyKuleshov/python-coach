@@ -28,7 +28,13 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from lesson_page import LessonPage
 from python_coach.settings import get_settings
-from python_coach.storage.models.lesson import Exercise, ExerciseTest, Lesson
+from python_coach.storage.models.lesson import (
+    Exercise,
+    ExerciseTest,
+    ExerciseTranslation,
+    Lesson,
+    LessonTranslation,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -52,17 +58,36 @@ async def _seed(slug: str) -> int:
     maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     try:
         async with maker() as session:
-            lesson = Lesson(slug=slug, title="UI seeded lesson", body_md="# ui", is_published=True)
+            lesson = Lesson(slug=slug, is_published=True)
+            lesson.translations = [
+                LessonTranslation(
+                    lesson_id=0, locale="en", title="UI seeded lesson", body_md="# ui"
+                ),
+                LessonTranslation(lesson_id=0, locale="ru", title="UI урок", body_md="# интерфейс"),
+            ]
             session.add(lesson)
             await session.flush()
             exercise = Exercise(
                 lesson_id=lesson.id or 0,
                 slug=f"{slug}-ex",
-                title="Return 42",
-                statement_md="Implement `answer()` to return 42.",
                 starter_code="def answer():\n    return 0\n",
+                solution_code="def answer():\n    return 42\n",
                 solution_module="solution",
             )
+            exercise.translations = [
+                ExerciseTranslation(
+                    exercise_id=0,
+                    locale="en",
+                    title="Return 42",
+                    statement_md="Implement `answer()` to return 42.",
+                ),
+                ExerciseTranslation(
+                    exercise_id=0,
+                    locale="ru",
+                    title="Верните 42",
+                    statement_md="Реализуйте `answer()`, чтобы вернуть 42.",
+                ),
+            ]
             session.add(exercise)
             await session.flush()
             test_src = (

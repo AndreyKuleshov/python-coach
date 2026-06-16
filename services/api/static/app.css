@@ -15,8 +15,21 @@ header {
   padding: 12px 24px;
   border-bottom: 1px solid var(--border);
   background: var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 header h1 { font-size: 18px; margin: 0; }
+.lang-switch { display: flex; gap: 4px; }
+.lang-switch button {
+  background: #fff;
+  color: #57606a;
+  border: 1px solid var(--border);
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.lang-switch button.active { background: #1f883d; color: #fff; border-color: #1f883d; }
 .tag {
   font-size: 11px;
   background: #ddf4ff;

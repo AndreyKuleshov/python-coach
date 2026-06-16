@@ -24,10 +24,16 @@ async def test_get_existing_lesson_returns_exercises(
     body = res.json()
     assert body["slug"] == seed_exercise.lesson_slug
     assert body["is_published"] is True
+    # Both locales are present in one payload (instant client-side switch).
+    assert body["title"]["en"] == "QA seeded lesson"
+    assert body["title"]["ru"] == "QA урок"
     assert len(body["exercises"]) == 1
     ex = body["exercises"][0]
     assert ex["id"] == seed_exercise.exercise_id
     assert ex["slug"] == seed_exercise.exercise_slug
+    assert ex["title"]["en"] == "QA exercise"
+    assert ex["title"]["ru"] == "QA задача"
+    assert ex["statement_md"]["ru"] == "Верните 42 из `answer()`."
     assert ex["starter_code"] == "def answer():\n    return 0\n"
 
 
@@ -58,3 +64,23 @@ async def test_lesson_response_never_leaks_test_sources(
     assert seed_exercise.visible_test_filename not in raw
     assert seed_exercise.hidden_test_filename not in raw
     assert "from solution import" not in raw
+
+
+@pytest.mark.regression
+async def test_lesson_response_never_leaks_solution_code(
+    client: httpx.AsyncClient, seed_exercise: SeededExercise
+) -> None:
+    """The hidden reference `solution_code` is stored but never sent to the frontend.
+
+    Same secrecy class as hidden test sources: the ExerciseDTO has no
+    `solution_code` field, and the seeded sentinel must not appear in the bytes.
+    """
+    res = await client.get(f"/api/lessons/{seed_exercise.lesson_slug}")
+    assert res.status_code == 200
+
+    ex = res.json()["exercises"][0]
+    assert "solution_code" not in ex
+
+    raw = res.text
+    assert "SECRET_REFERENCE_SOLUTION" not in raw
+    assert seed_exercise.solution_code not in raw

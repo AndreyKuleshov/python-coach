@@ -67,6 +67,13 @@ Key contract rules:
 - Each exercise has its **own pytest test set** (`tests_py`) covering: the happy path, edge cases, and at least one "tricky" case that catches a common mistake.
 - Tests must be deterministic (no network, no unseeded randomness, no time dependence) — they run in an isolated environment.
 
+## Mandatory — bilingual content (EN + RU)
+Every learner-facing **prose** field must be authored in **both English and Russian** — this is a hard product requirement, not optional. Per `STORAGE_CONTRACT.md`, the translated fields are lesson `title` + `body_md` and exercise `title` + `statement_md`, each supplied as a `{ "en": "...", "ru": "..." }` object. The two languages must be genuine equivalents (same meaning, same examples), each natural in its language — not a machine-literal calque.
+
+Language-neutral fields stay single-valued and are NOT translated: `starter_code`, `solution_code`, `solution_module`, and every test's `filename`/`content` (code is code; pytest names and assertion messages are not localized). Keep code comments in English.
+
+Also provide `solution_code` per exercise (the hidden reference solution you validate the tests against). The ingest fallback that mirrors a bare string across locales is a legacy safety net only — never ship a published lesson with a missing locale.
+
 ## CRITICAL — validate before emitting (actually run it)
 Do not "mentally" check. For each exercise, actually verify with the project's tooling:
 1. Run `tests_py` against `solution_code` via `uv run pytest` (in a scratch dir) and confirm **all tests pass**.

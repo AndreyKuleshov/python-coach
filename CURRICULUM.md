@@ -26,8 +26,8 @@ lesson's `position` (the integer in the **Pos** column).
 | 1 | First-class & higher-order functions; closures | `functions-first-class` | Y, R | planned | Fixtures and parametrization pass callables around; closures back factory fixtures. |
 | 2 | `*args` / `**kwargs`, argument forwarding | `args-kwargs` | Y | planned | Wrappers/decorators must forward arbitrary test signatures. |
 | 3 | **Decorators (basics)** | `decorators-basics` | Y, R | **done** | `@pytest.fixture`, `@pytest.mark.*`, timing/retry decorators. |
-| 4 | Decorators with arguments; stacking; `functools.wraps` deep dive | `decorators-advanced` | Y, R | next | `@pytest.mark.parametrize`, custom marks, `@retry(times=3)`. |
-| 5 | `functools` toolkit (`partial`, `lru_cache`, `reduce`) | `functools-toolkit` | Y, R | planned | `partial` for building parametrized test callables and clients. |
+| 4 | Decorators with arguments; stacking; `functools.wraps` deep dive | `decorators-advanced` | Y, R | done | `@pytest.mark.parametrize`, custom marks, `@retry(times=3)`. |
+| 5 | `functools` toolkit (`partial`, `lru_cache`, `reduce`) | `functools-toolkit` | Y, R | next | `partial` for building parametrized test callables and clients. |
 
 ## Track 2 — Iteration & lazy data (test-data generation)
 

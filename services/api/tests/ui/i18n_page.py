@@ -119,55 +119,62 @@ class LessonView:
         self.lang = LangSwitch(page)
 
     def open(self) -> "LessonView":
-        """Navigate to the lesson by slug (authenticated) and wait for the editor."""
+        """Navigate to the lesson by slug (authenticated) and wait for the first editor."""
         if self._token is not None:
             self.page.add_init_script(
                 f"window.localStorage.setItem('python-coach.token', '{self._token}');"
             )
         self.page.goto(f"{self._base_url}/?lesson={self._lesson_slug}")
-        # The CodeMirror widget only mounts after the exercise loads; waiting on
-        # the populated title + widget removes the first-interaction race.
+        # The CodeMirror widget only mounts after exercises load; waiting on
+        # the first widget removes the first-interaction race.
         self.editor.wait_for(state="visible")
         return self
 
     def reload(self) -> "LessonView":
-        """Reload and wait for the editor to re-mount (persistence check)."""
+        """Reload and wait for the first editor to re-mount (persistence check)."""
         self.page.reload()
         self.editor.wait_for(state="visible")
         return self
 
-    def type_into_editor(self, text: str) -> "LessonView":
-        """Append `text` into the CodeMirror editor (drives the real widget)."""
-        self.editor.click()
+    def type_into_editor(self, text: str, exercise_index: int = 0) -> "LessonView":
+        """Append `text` into the CodeMirror editor for the given exercise (0-based)."""
+        self.page.locator(".CodeMirror").nth(exercise_index).click()
         self.page.keyboard.type(text)
         return self
 
-    def editor_text(self) -> str:
-        """Current editor contents, read from the live CodeMirror instance."""
+    def editor_text(self, exercise_index: int = 0) -> str:
+        """Current contents of the CodeMirror editor for the given exercise (0-based)."""
         return self.page.evaluate(
-            "() => document.querySelector('.CodeMirror').CodeMirror.getValue()"
+            "(i) => document.querySelectorAll('.CodeMirror')[i].CodeMirror.getValue()",
+            exercise_index,
         )
 
     @property
     def editor(self) -> Locator:
-        return self.page.locator(".CodeMirror")
+        """The first CodeMirror widget (used for waiting on page load)."""
+        return self.page.locator(".CodeMirror").first
 
     @property
     def lesson_title(self) -> Locator:
+        """The lesson-level heading."""
         return self.page.get_by_test_id("lesson-title")
 
     @property
     def exercise_title(self) -> Locator:
-        return self.page.get_by_test_id("exercise-title")
+        """The first exercise's title (kept for backward compat)."""
+        return self.page.get_by_test_id("exercise-item-title").first
 
     @property
     def editor_label(self) -> Locator:
-        return self.page.get_by_test_id("editor-label")
+        """The first exercise's editor label (kept for backward compat)."""
+        return self.page.get_by_test_id("editor-label").first
 
     @property
     def check_button(self) -> Locator:
-        return self.page.get_by_test_id("check-btn")
+        """The first exercise's Check button (kept for backward compat)."""
+        return self.page.get_by_test_id("check-btn").first
 
     @property
     def back_link(self) -> Locator:
+        """The '← Back to lessons' link."""
         return self.page.get_by_test_id("back-to-lessons")

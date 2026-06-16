@@ -28,12 +28,7 @@ const REDIRECT_KEY = "python-coach.redirect";
 // UI chrome strings live in i18n.js (loaded first) as window.Coach.UI.
 const UI = window.Coach.UI;
 
-let editor = null;
-let currentExerciseId = null;
 let lessonData = null; // the both-locales payload (lesson view only)
-let currentExercise = null; // the both-locales exercise object
-let lastResults = null; // last render payload, so a locale switch re-labels it
-let lastProgress = null;
 let lessonList = null; // cached list payload (list view only)
 let activeView = "auth"; // "auth" | "list" | "lesson" — drives locale re-render
 let locale = resolveInitialLocale();
@@ -211,30 +206,15 @@ async function loadLesson() {
   }
   lessonData = await res.json();
 
-  if (!lessonData.exercises.length) {
-    currentExercise = null;
-  } else {
-    currentExercise = lessonData.exercises[0];
-    currentExerciseId = currentExercise.id;
-    // Create the editor once; a language switch must not rebuild it (and lose
-    // the learner's edits). Seed it with starter code only on first render.
-    editor = CodeMirror.fromTextArea(document.getElementById("editor"), {
-      mode: "python",
-      lineNumbers: true,
-      indentUnit: 4,
-    });
-    editor.setValue(currentExercise.starter_code || "");
-  }
-
   renderProse();
-  if (currentExerciseId !== null) await refreshProgress();
+  // Render all exercise blocks (fetches progress internally).
+  await window.Coach.Exercise.renderExercises(lessonData, LESSON_SLUG, window.Coach.authHeaders);
 }
 
-// Re-render every locale-dependent surface. Safe to call on load and on switch.
+// Re-render every locale-dependent surface on the lesson page. Safe to call
+// on load and on locale switch; never rebuilds CodeMirror editors.
 function renderProse() {
   syncLangChrome();
-  document.getElementById("editor-label").textContent = t().editorLabel;
-  document.getElementById("results-heading").textContent = t().resultsHeading;
 
   const backLink = document.getElementById("back-to-lessons");
   if (backLink) backLink.textContent = t().backToLessons;
@@ -243,159 +223,8 @@ function renderProse() {
   document.getElementById("lesson-title").textContent = pick(lessonData.title);
   document.getElementById("lesson-body").innerHTML = marked.parse(pick(lessonData.body_md) || "");
 
-  if (!currentExercise) {
-    document.getElementById("exercise-title").textContent = t().noExercises;
-    return;
-  }
-  document.getElementById("exercise-title").textContent = pick(currentExercise.title);
-  document.getElementById("exercise-statement").innerHTML = marked.parse(
-    pick(currentExercise.statement_md) || "",
-  );
-
-  const btn = document.getElementById("check-btn");
-  if (btn.textContent !== t().checking) btn.textContent = t().check;
-  if (lastResults) renderResults(lastResults);
-  renderProgressBadge();
-  renderCompletion();
-}
-
-// Render the lesson-completed state + the "Next lesson" / "all complete" CTA.
-// Driven by lessonData.is_completed (server-derived) and lessonData.next_slug.
-function renderCompletion() {
-  const panel = document.getElementById("lesson-completion");
-  if (!panel) return;
-  if (!lessonData || !lessonData.is_completed) {
-    panel.classList.add("hidden");
-    return;
-  }
-  panel.classList.remove("hidden");
-  document.getElementById("completion-text").textContent = t().lessonCompleted;
-
-  const nextBtn = document.getElementById("next-lesson-btn");
-  const allDone = document.getElementById("all-complete-msg");
-  if (lessonData.next_slug) {
-    nextBtn.classList.remove("hidden");
-    nextBtn.textContent = t().nextLesson;
-    nextBtn.onclick = () => {
-      window.location.href = `/?lesson=${encodeURIComponent(lessonData.next_slug)}`;
-    };
-    allDone.classList.add("hidden");
-  } else {
-    // Last lesson: no next; show the all-complete message + a profile link.
-    nextBtn.classList.add("hidden");
-    allDone.classList.remove("hidden");
-    allDone.textContent = t().allLessonsComplete;
-  }
-}
-
-async function refreshProgress() {
-  const res = await fetch(`/api/progress/${currentExerciseId}`, {
-    headers: window.Coach.authHeaders(),
-  });
-  if (res.status === 401) {
-    window.Coach.logout();
-    return;
-  }
-  if (!res.ok) return;
-  lastProgress = await res.json();
-  renderProgressBadge();
-}
-
-function renderProgressBadge() {
-  const badge = document.getElementById("progress-badge");
-  if (!lastProgress) {
-    badge.textContent = "";
-    return;
-  }
-  const p = lastProgress;
-  badge.textContent = p.is_solved
-    ? t().solved(p.attempts)
-    : p.attempts
-      ? t().notSolved(p.attempts)
-      : t().notAttempted;
-}
-
-async function check() {
-  const btn = document.getElementById("check-btn");
-  btn.disabled = true;
-  btn.textContent = t().checking;
-  try {
-    const res = await fetch("/api/submissions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...window.Coach.authHeaders() },
-      body: JSON.stringify({ exercise_id: currentExerciseId, code: editor.getValue() }),
-    });
-    // Token expired/invalid: drop it and bounce to the auth gate.
-    if (res.status === 401) {
-      window.Coach.logout();
-      return;
-    }
-    const data = await res.json();
-    renderResults(data);
-    await refreshProgress();
-    // A pass may complete the lesson: re-fetch to refresh is_completed/next_slug.
-    if (data.passed) await refreshLessonCompletion();
-  } catch (e) {
-    renderResults({ runner_error: String(e), tests: [] });
-  } finally {
-    btn.disabled = false;
-    btn.textContent = t().check;
-  }
-}
-
-// Re-fetch the lesson to pick up freshly-derived is_completed/next_slug after a
-// passing submission, then re-render the completion CTA. Preserves the editor.
-async function refreshLessonCompletion() {
-  const res = await fetch(`/api/lessons/${encodeURIComponent(LESSON_SLUG)}`, {
-    headers: window.Coach.authHeaders(),
-  });
-  if (!res.ok) return;
-  const fresh = await res.json();
-  lessonData.is_completed = fresh.is_completed;
-  lessonData.next_slug = fresh.next_slug;
-  renderCompletion();
-}
-
-function renderResults(data) {
-  lastResults = data;
-  const panel = document.getElementById("results");
-  panel.classList.remove("hidden");
-  const summary = document.getElementById("results-summary");
-  summary.textContent = data.passed
-    ? t().allPassed
-    : t().passedOf(data.passed_count || 0, data.total || 0);
-
-  const list = document.getElementById("results-list");
-  list.innerHTML = "";
-  for (const item of data.tests || []) {
-    const li = document.createElement("li");
-    li.className = item.outcome;
-    li.setAttribute("data-testid", "result-item");
-    li.setAttribute("data-outcome", item.outcome);
-    // Build via DOM, not innerHTML: item.name is a pytest nodeid from user-named
-    // files and must not be interpreted as HTML (XSS).
-    const outcome = document.createElement("span");
-    outcome.className = "outcome";
-    outcome.setAttribute("data-testid", "result-outcome");
-    outcome.textContent = item.outcome.toUpperCase();
-    li.appendChild(outcome);
-    li.appendChild(document.createTextNode(item.name));
-    if (item.message) {
-      const msg = document.createElement("span");
-      msg.className = "message";
-      msg.textContent = item.message;
-      li.appendChild(msg);
-    }
-    list.appendChild(li);
-  }
-
-  const err = document.getElementById("results-error");
-  if (data.runner_error) {
-    err.classList.remove("hidden");
-    err.textContent = `${t().runnerError(data.runner_error)}\n${data.stderr || ""}`;
-  } else {
-    err.classList.add("hidden");
-  }
+  // Re-render exercise blocks (locale-sensitive strings only, editors preserved).
+  window.Coach.Exercise.rerenderLocale(lessonData);
 }
 
 // ── Locale switch ──────────────────────────────────────────────────────────
@@ -469,7 +298,6 @@ window.Coach.onLoggedOut = onLoggedOut;
 
 // ── Boot ───────────────────────────────────────────────────────────────────
 
-document.getElementById("check-btn").addEventListener("click", check);
 document.querySelectorAll(".lang-switch button").forEach((b) => {
   b.addEventListener("click", () => switchLocale(b.dataset.locale));
 });

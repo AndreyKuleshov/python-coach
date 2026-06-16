@@ -26,6 +26,7 @@ pytestmark = [pytest.mark.ui]
 # Real published lesson available in the shared dev DB.
 _REAL_SLUG = "functions-first-class"
 _REAL_LESSON_TITLE_EN = "First-class & higher-order functions; closures"
+# First exercise of the lesson — shown as the first exercise-item-title block.
 _REAL_EXERCISE_TITLE_EN = "Apply a function to each item"
 
 
@@ -212,11 +213,17 @@ def test_lesson_title_is_localized_string_not_object(
 def test_exercise_title_is_localized_string_not_object(
     browser: Browser, live_server: str, seeded_user: SeededUser
 ) -> None:
-    """The exercise title must be the locale-picked string, not '[object Object]'."""
+    """The first exercise title must be the locale-picked string, not '[object Object]'.
+
+    With multi-exercise rendering the title lives in data-testid="exercise-item-title"
+    inside the first exercise-item block; there is no longer a single global exercise-title.
+    """
     ctx, page = _authed_page(browser, seeded_user.token)
     try:
         page.goto(f"{live_server}/?lesson={_REAL_SLUG}")
-        exercise_title = page.get_by_test_id("exercise-title")
+        # Wait for the first exercise block to render.
+        page.locator(".CodeMirror").first.wait_for(state="visible")
+        exercise_title = page.get_by_test_id("exercise-item-title").first
         expect(exercise_title).not_to_have_text("")
         expect(exercise_title).not_to_contain_text("[object Object]")
         expect(exercise_title).to_have_text(_REAL_EXERCISE_TITLE_EN)
@@ -234,7 +241,10 @@ def test_fe_fix_screenshot(browser: Browser, live_server: str, seeded_user: Seed
         page.goto(f"{live_server}/?lesson={_REAL_SLUG}")
         expect(page.get_by_test_id("lesson-title")).not_to_have_text("Loading…")
         expect(page.get_by_test_id("lesson-title")).not_to_contain_text("[object Object]")
-        expect(page.get_by_test_id("exercise-title")).not_to_contain_text("[object Object]")
+        # With multi-exercise layout the title is per-block under exercise-item-title.
+        expect(page.get_by_test_id("exercise-item-title").first).not_to_contain_text(
+            "[object Object]"
+        )
         expect(page.locator("#lesson-list-section")).to_be_hidden()
         expect(page.get_by_test_id("auth-gate")).to_be_hidden()
 

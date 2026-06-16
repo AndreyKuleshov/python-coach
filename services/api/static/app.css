@@ -153,3 +153,10 @@ button:disabled { opacity: 0.6; cursor: wait; }
 .profile-lessons li.lesson-locked { color: #8c959f; }
 .profile-lessons li.lesson-current { font-weight: 700; }
 .profile-lesson-counts { font-size: 13px; color: #57606a; }
+
+/* Multi-exercise lesson: per-block separator and progress counter. */
+.exercise-item { border-top: 1px solid var(--border); margin-top: 24px; padding-top: 20px; }
+.exercise-item:first-child { border-top: none; margin-top: 0; padding-top: 0; }
+.exercise-item-title { margin: 0 0 8px; font-size: 17px; }
+.progress-counter { font-size: 14px; color: #57606a; margin: 0 0 16px; font-weight: 600; }
+.solved-badge-active { color: var(--pass); font-weight: 600; }

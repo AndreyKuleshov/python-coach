@@ -95,22 +95,11 @@
       </section>
 
       <section id="exercise-section" class="hidden">
-        <h3 id="exercise-title" data-testid="exercise-title"></h3>
-        <div id="exercise-statement" class="markdown" data-testid="exercise-statement"></div>
+        <!-- Lesson-level progress counter: "X / N solved" -->
+        <p id="progress-counter" class="progress-counter" data-testid="progress-counter"></p>
 
-        <label for="editor" id="editor-label" data-testid="editor-label">Your solution</label>
-        <textarea id="editor"></textarea>
-
-        <div class="controls">
-          <button id="check-btn" data-testid="check-btn">Check</button>
-          <span id="progress-badge" class="badge" data-testid="progress-badge"></span>
-        </div>
-
-        <div id="results" class="results hidden" data-testid="results-panel">
-          <h4><span id="results-heading" data-testid="results-heading">Results</span> <span id="results-summary" data-testid="results-summary"></span></h4>
-          <ul id="results-list" data-testid="results-list"></ul>
-          <pre id="results-error" class="error hidden" data-testid="results-error"></pre>
-        </div>
+        <!-- All exercise blocks are rendered here by exercise.js -->
+        <div id="exercises-container" data-testid="exercises-container"></div>
 
         <!-- LESSON COMPLETED state: shown when every exercise is solved. -->
         <div id="lesson-completion" class="completion hidden" data-testid="lesson-completion">
@@ -139,6 +128,7 @@
          profile.js — profile view; reads app.js's locale helpers + UI catalog. -->
     <script src="/static/i18n.js"></script>
     <script src="/static/auth.js"></script>
+    <script src="/static/exercise.js"></script>
     <script src="/static/app.js"></script>
     <script src="/static/profile.js"></script>
   </body>

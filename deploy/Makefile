@@ -5,7 +5,7 @@ DEPLOY_DIR := $(REPO_ROOT)/deploy
 .PHONY: deploy-up deploy-down deploy-logs
 
 deploy-up:
-	docker compose --env-file $(DEPLOY_DIR)/.env -f $(DEPLOY_DIR)/docker-compose.yml up -d
+	docker compose --env-file $(DEPLOY_DIR)/.env -f $(DEPLOY_DIR)/docker-compose.yml up -d --wait
 
 deploy-down:
 	docker compose -f $(DEPLOY_DIR)/docker-compose.yml down

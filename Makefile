@@ -4,8 +4,10 @@
 include services/api/Makefile
 include services/sandbox/Makefile
 include deploy/Makefile
+include dev/Makefile
 
-.PHONY: help
+.PHONY: help dev
 help:
-	@echo "Domains: api-* (services/api), sandbox-* (services/sandbox), deploy-* (deploy)"
-	@echo "Quick start: make deploy-up && make api-migrate && make sandbox-build && make api-seed && make api-run"
+	@echo "Domains: api-* (services/api), sandbox-* (services/sandbox), deploy-* (deploy), dev-* (dev)"
+	@echo "One-command start: make dev      (alias for dev-up)"
+	@echo "One-command stop:  make dev-down (stop and remove compose stack)"

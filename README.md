@@ -85,7 +85,7 @@ cp deploy/.env.example deploy/.env
 
 | Var | Meaning |
 |---|---|
-| `DATABASE_URL` | `postgresql+asyncpg://coach:<pw>@localhost:5433/coach` |
+| `DATABASE_URL` | `postgresql+asyncpg://coach:<pw>@localhost:5544/coach` |
 | `SANDBOX_IMAGE` | tag built from `services/sandbox/Dockerfile` |
 | `SANDBOX_WALL_TIMEOUT_SECONDS` | hard kill per run (e.g. `10`) |
 | `SANDBOX_MEMORY_LIMIT` | e.g. `256m` |
@@ -93,24 +93,39 @@ cp deploy/.env.example deploy/.env
 | `DOCKER_BIN` | path to docker CLI (`docker`) |
 
 `deploy/.env`: `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` /
-`POSTGRES_PORT` (defaults to `5433` to avoid a host Postgres on 5432).
+`POSTGRES_PORT` (defaults to `5544` to avoid a host Postgres on 5432).
 
 ## Run locally
 
 ```bash
-make api-install      # uv sync (workspace deps)
-make deploy-up        # start Postgres (docker compose)
-make api-migrate      # alembic upgrade head
-make sandbox-build    # build the sandbox Docker image
-make api-seed         # load the THROWAWAY placeholder lesson
-make api-run          # uvicorn on :8000  (use a free port if 8000 is taken)
+make api-install   # uv sync (once, or after dependency changes)
+make dev           # everything else: Postgres → migrate → sandbox image → seed → uvicorn
 ```
+
+`make dev` (`dev-up`) runs these steps in order and waits for each to succeed:
+
+1. **Postgres** via `docker compose up -d --wait` — blocks until the compose
+   healthcheck passes (`pg_isready`), so migrations never race the DB.
+2. **Alembic migrations** (`alembic upgrade head`).
+3. **Sandbox Docker image** build.
+4. **Seed** the placeholder lesson (upsert-by-slug — safe to re-run).
+5. **uvicorn** on `:8000` — foreground, keeping the terminal live.
 
 Then open `http://127.0.0.1:8000/?lesson=placeholder-intro`, write code, click
 **Check**.
 
-> Note: pick a port not already bound on your machine. During development this
-> repo's author had unrelated services on 5432 and 8000, hence Postgres on 5433.
+To stop: `Ctrl-C` (kills uvicorn), then `make dev-down` to tear down Postgres.
+
+You can still run steps individually:
+
+```bash
+make deploy-up        # start Postgres only
+make api-migrate      # alembic upgrade head
+make sandbox-build    # build the sandbox Docker image
+make api-seed         # load the THROWAWAY placeholder lesson
+make api-run          # uvicorn on :8000
+make deploy-down      # stop Postgres
+```
 
 ## Useful commands
 
@@ -147,7 +162,7 @@ Then open `http://127.0.0.1:8000/?lesson=placeholder-intro`, write code, click
    *user code* is untrusted). Acceptable for a single-user personal platform.
 3. Synchronous grading is fine at single-user scale (one container per request).
 4. Each exercise's tests are independent files; no shared `conftest.py` yet.
-5. Postgres on `5433` locally to dodge a common 5432 clash — adjust freely.
+5. Postgres on `5544` locally to dodge a common 5432 clash — adjust freely.
 
 **Open questions for the owner:**
 1. Should hidden-test *failures* reveal the assertion message, or only "a hidden

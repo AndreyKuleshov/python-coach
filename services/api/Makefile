@@ -26,9 +26,10 @@ api-seed:
 
 # api-seed-all: upsert every fixture in fixtures/ (placeholder stays is_published:false).
 api-seed-all:
-	uv run --directory $(API_DIR) python -m python_coach.seed $(REPO_ROOT)/fixtures/placeholder_lesson.json
-	uv run --directory $(API_DIR) python -m python_coach.seed $(REPO_ROOT)/fixtures/lesson_decorators_basics.json
-	uv run --directory $(API_DIR) python -m python_coach.seed $(REPO_ROOT)/fixtures/lesson_decorators_advanced.json
+	@for f in $(REPO_ROOT)/fixtures/*.json; do \
+		echo "seeding $$f"; \
+		uv run --directory $(API_DIR) python -m python_coach.seed "$$f" || exit $$?; \
+	done
 
 api-test:
 	uv run --directory $(API_DIR) pytest

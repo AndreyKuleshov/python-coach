@@ -66,16 +66,16 @@ lesson's `position` (the integer in the **Pos** column).
 | Pos | Topic | Lesson slug | Source | Status | AQA connection |
 |----:|-------|-------------|--------|--------|----------------|
 | 18 | `async`/`await` basics | `async-basics` | R | **done** | Testing async code; `pytest-asyncio` mental model. |
-| 19 | Mocking & test doubles (stdlib `unittest.mock`) | `mocking` | O | planned | Isolating units; patching network/time for determinism. |
+| 19 | Mocking & test doubles (stdlib `unittest.mock`) | `mocking` | O | **done** | Isolating units; patching network/time for determinism. |
 
 ## Track 7 — pytest mastery (capstone, AQA-specific)
 
 | Pos | Topic | Lesson slug | Source | Status | AQA connection |
 |----:|-------|-------------|--------|--------|----------------|
-| 20 | Fixtures: scope, factories, `yield` teardown | `pytest-fixtures` | O | planned | Core AQA skill; builds on decorators + generators + context managers. |
-| 21 | Parametrization & `ids` | `pytest-parametrize` | O | planned | Table-driven testing; builds on Track 1/2. |
-| 22 | Marks, conftest, plugins | `pytest-marks-plugins` | O | planned | Organizing real suites; builds on decorators-advanced. |
-| 23 | Assertions, `pytest.raises`, `approx` | `pytest-assertions` | O | planned | Expressive failures; builds on exceptions + context managers. |
+| 20 | Fixtures: scope, factories, `yield` teardown | `pytest-fixtures` | O | **done** | Core AQA skill; builds on decorators + generators + context managers. |
+| 21 | Parametrization & `ids` | `pytest-parametrize` | O | **done** | Table-driven testing; builds on Track 1/2. |
+| 22 | Marks, conftest, plugins | `pytest-marks-plugins` | O | **done** | Organizing real suites; builds on decorators-advanced. |
+| 23 | Assertions, `pytest.raises`, `approx` | `pytest-assertions` | O | **done** | Expressive failures; builds on exceptions + context managers. |
 
 ## Dependency notes
 
@@ -85,6 +85,7 @@ lesson's `position` (the integer in the **Pos** column).
 
 ## Progress
 
-Done (18): pos 1–18. Remaining: pos 19 `mocking`, then Track 7 capstone —
-pos 20 `pytest-fixtures`, 21 `pytest-parametrize`, 22 `pytest-marks-plugins`,
-23 `pytest-assertions`.
+**Done: all 23 (pos 1–23).** The full advanced-Python/AQA curriculum is authored
+and bilingual. Next-stage content ideas (beyond this map): deeper async testing
+once the sandbox image gains `pytest-asyncio`; `inspect.signature` / introspection;
+`enum`; equivalence-class / boundary-value test-design lessons.

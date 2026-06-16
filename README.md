@@ -65,11 +65,21 @@ Login is **email + password** with **email confirmation required** before login.
   token** (`{access_token, token_type, expires_at}`).
 - `GET /api/auth/me` — the current user, resolved from `Authorization: Bearer`.
 
-**Protected** (require the bearer token, keyed to the current user):
-`POST /api/submissions`, `GET /api/submissions/{id}`, `GET /api/progress/{id}`.
-**Public:** `GET /api/lessons`, `GET /api/lessons/{slug}`. The frontend stores
-the JWT in `localStorage`, attaches it on submit/progress calls, and gates the
-**Check** button behind login (lesson reading stays open).
+**Protected — everything content-related** (require the bearer token;
+a request without/with an invalid token → **401**):
+`GET /api/lessons`, `GET /api/lessons/{slug}`, `POST /api/submissions`,
+`GET /api/submissions/{id}`, `GET /api/progress/{id}`. Lesson reads validate the
+token; submissions/progress are additionally keyed to the current user.
+**Public — the only unauthenticated endpoints:** the auth routes above
+(`register`, `confirm`, `login`; `me` resolves the token).
+
+The frontend stores the JWT in `localStorage` and attaches it on every content
+call. **No content is reachable while logged out:** the landing `/` shows the
+inline login/register form, the lessons list is its own authenticated view at
+`/lessons` (a backend SPA catch-all serves the shell so the JS router resolves
+it), and any logged-out deep link redirects to the auth form. After login the
+user lands on the lessons list (or the lesson they deep-linked); after logout —
+or on any 401 from an authenticated fetch — the UI drops back to the auth form.
 
 ## Code-execution safety (threat model + isolation)
 
@@ -152,8 +162,9 @@ make dev           # everything else: Postgres → migrate → sandbox image →
    port to avoid clashing with other local projects; override with
    `make api-run API_PORT=xxxx`.)
 
-Then open `http://127.0.0.1:8077/`, **register** (or log in), and open a lesson.
-Reading is public; clicking **Check** requires being logged in.
+Then open `http://127.0.0.1:8077/`: logged out, you see only the login/register
+form. **Register** (confirm the email), **log in**, and you land on the lessons
+list at `/lessons`. No lesson content is reachable until you are logged in.
 
 **Confirming an account without SMTP:** with `SMTP_HOST` empty, the confirmation
 link is logged instead of emailed. Grab it from the server output and open it:

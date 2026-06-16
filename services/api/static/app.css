@@ -97,33 +97,23 @@ button:disabled { opacity: 0.6; cursor: wait; }
 .auth-user { display: flex; align-items: center; gap: 8px; }
 .auth-user .auth-user { display: inline; }
 #auth-email { color: #1f2328; font-weight: 600; }
-.auth-user.hidden, #open-auth-btn.hidden { display: none; }
+.auth-user.hidden { display: none; }
 
-.login-prompt { color: #0969da; font-size: 13px; text-decoration: none; }
-.login-prompt:hover { text-decoration: underline; }
-
-/* Auth modal */
-.modal {
-  position: fixed; inset: 0; background: rgba(0, 0, 0, 0.4);
-  display: flex; align-items: center; justify-content: center; z-index: 100;
-}
-.modal.hidden { display: none; }
-.modal-card {
-  position: relative; background: #fff; border-radius: 10px;
+/* Auth gate: the inline login/register page shown to logged-out visitors. */
+.auth-gate { display: flex; justify-content: center; padding-top: 24px; }
+.auth-gate.hidden { display: none; }
+.auth-card {
+  background: #fff; border: 1px solid var(--border); border-radius: 10px;
   padding: 28px 28px 20px; width: 340px; max-width: 90vw;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
 }
-.modal-close {
-  position: absolute; top: 8px; right: 10px; background: none; color: #57606a;
-  border: 0; font-size: 22px; line-height: 1; padding: 4px; cursor: pointer;
-}
-.modal-card h2 { margin: 0 0 16px; font-size: 18px; }
-.modal-card label { font-weight: 600; margin: 12px 0 4px; font-size: 13px; }
-.modal-card input {
+.auth-card h2 { margin: 0 0 16px; font-size: 18px; }
+.auth-card label { font-weight: 600; margin: 12px 0 4px; font-size: 13px; }
+.auth-card input {
   width: 100%; padding: 8px 10px; border: 1px solid var(--border);
   border-radius: 6px; font-size: 14px;
 }
-.modal-card button[type="submit"] { width: 100%; margin-top: 16px; }
+.auth-card button[type="submit"] { width: 100%; margin-top: 16px; }
 .form-error { color: var(--fail); font-size: 13px; margin: 10px 0 0; }
 .form-error.hidden { display: none; }
 .form-switch { font-size: 13px; color: #57606a; margin: 14px 0 0; text-align: center; }

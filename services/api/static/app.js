@@ -1,15 +1,18 @@
 "use strict";
 
-// Single-page lesson UI.
+// Single-page lesson UI with an auth gate + client-side router.
 //
-// Two views share this module:
-//   - LIST VIEW  (no ?lesson= param): fetch /api/lessons and render a
-//     clickable curriculum index. Each item links to ?lesson=<slug>.
-//   - LESSON VIEW (?lesson=<slug>): load that lesson, render prose + the first
-//     exercise, and wire the submit -> sandbox -> result -> progress flow.
+// Access model: NO content is reachable while logged out. Every route renders
+// the inline auth gate (login/register) until a valid token exists. Routes:
+//   /              landing. Logged out -> auth gate. Logged in -> /lessons.
+//   /lessons       the authenticated lessons-list view (its own URL).
+//   /?lesson=<slug> the authenticated lesson view (prose + first exercise).
 //
-// Language switching is instant and client-side in both views: the lesson
-// payload carries both locales, and the list page renders titles from the
+// A logged-out deep link (/lessons or /?lesson=...) shows the gate and stashes
+// the requested lesson so a successful login returns the user to it.
+//
+// Language switching is instant and client-side in both content views: the
+// lesson payload carries both locales, and the list renders titles in the
 // active locale without a re-fetch.
 //
 // Auth functions live in auth.js (loaded first). Both files share window.Coach.
@@ -18,10 +21,13 @@
 window.Coach = window.Coach || {};
 
 const params = new URLSearchParams(window.location.search);
-const LESSON_SLUG = params.get("lesson"); // null => list view
+const LESSON_SLUG = params.get("lesson"); // set => lesson view requested
+const IS_LESSONS_PATH = window.location.pathname === "/lessons";
 
 const SUPPORTED = ["en", "ru"];
 const LOCALE_KEY = "python-coach.locale";
+// Where to send the user after a successful login if they deep-linked a lesson.
+const REDIRECT_KEY = "python-coach.redirect";
 
 // UI chrome strings per locale. No i18n framework — a tiny catalog is enough
 // for two locales. Functions handle pluralisation/interpolation.
@@ -42,7 +48,6 @@ const UI = {
     listHeading: "Lessons",
     backToLessons: "← Back to lessons",
     emptyList: "No lessons published yet.",
-    logIn: "Log in",
     logOut: "Log out",
     register: "Register",
     email: "Email",
@@ -54,8 +59,7 @@ const UI = {
     checkYourEmail: "Check your email",
     confirmPendingText: (e) =>
       `We sent a confirmation link to ${e}. Open it to activate your account, then log in.`,
-    loginRequired: "Log in to check your solution",
-    loginToCheck: "Log in to check →",
+    logIn: "Log in",
     invalidCredentials: "Email or password is incorrect.",
     emailNotConfirmed: "Confirm your email before logging in.",
     emailTaken: "That email is already registered.",
@@ -78,7 +82,6 @@ const UI = {
     listHeading: "Уроки",
     backToLessons: "← К списку уроков",
     emptyList: "Уроки ещё не опубликованы.",
-    logIn: "Войти",
     logOut: "Выйти",
     register: "Регистрация",
     email: "Эл. почта",
@@ -90,8 +93,7 @@ const UI = {
     checkYourEmail: "Проверьте почту",
     confirmPendingText: (e) =>
       `Мы отправили ссылку для подтверждения на ${e}. Откройте её, чтобы активировать аккаунт, затем войдите.`,
-    loginRequired: "Войдите, чтобы проверить решение",
-    loginToCheck: "Войдите для проверки →",
+    logIn: "Войти",
     invalidCredentials: "Неверная почта или пароль.",
     emailNotConfirmed: "Подтвердите почту перед входом.",
     emailTaken: "Эта почта уже зарегистрирована.",
@@ -107,6 +109,7 @@ let currentExercise = null; // the both-locales exercise object
 let lastResults = null; // last render payload, so a locale switch re-labels it
 let lastProgress = null;
 let lessonList = null; // cached list payload (list view only)
+let activeView = "auth"; // "auth" | "list" | "lesson" — drives locale re-render
 let locale = resolveInitialLocale();
 
 // navigator.language wins on first visit; a persisted manual choice wins after.
@@ -127,36 +130,43 @@ function pick(localized) {
   return localized[locale] || localized.en || localized.ru || "";
 }
 
-// Publish the locale getter and lesson slug into the shared namespace so auth.js
-// can read them without importing or relying on implicit access.
+// Publish the locale getter into the shared namespace so auth.js can read it.
 window.Coach.t = t;
-window.Coach.lessonSlug = LESSON_SLUG;
+
+// Keep the header lang-switch buttons + <html lang> in sync with the locale.
+function syncLangChrome() {
+  document.querySelectorAll(".lang-switch button").forEach((b) => {
+    b.classList.toggle("active", b.dataset.locale === locale);
+  });
+  document.documentElement.lang = locale;
+}
 
 // ── List view ──────────────────────────────────────────────────────────────
 
 async function loadList() {
-  const res = await fetch("/api/lessons");
+  const res = await fetch("/api/lessons", { headers: window.Coach.authHeaders() });
+  // An expired/invalid token mid-session: drop to the auth gate, no leak.
+  if (res.status === 401) {
+    window.Coach.logout();
+    return;
+  }
   if (!res.ok) return;
   lessonList = await res.json();
   renderList();
 }
 
 function renderList() {
-  // Show the list section; hide the lesson/exercise sections used by lesson view.
+  activeView = "list";
+  document.getElementById("auth-gate").classList.add("hidden");
   document.getElementById("lesson-list-section").classList.remove("hidden");
   document.getElementById("lesson-section").classList.add("hidden");
   document.getElementById("exercise-section").classList.add("hidden");
 
   document.getElementById("list-heading").textContent = t().listHeading;
+  syncLangChrome();
 
   const ul = document.getElementById("lesson-list");
   ul.innerHTML = "";
-
-  // Keep lang-switch buttons in sync on list view too.
-  document.querySelectorAll(".lang-switch button").forEach((b) => {
-    b.classList.toggle("active", b.dataset.locale === locale);
-  });
-  document.documentElement.lang = locale;
 
   if (!lessonList || !lessonList.length) {
     const li = document.createElement("li");
@@ -181,7 +191,8 @@ function renderList() {
 // ── Lesson view ────────────────────────────────────────────────────────────
 
 async function loadLesson() {
-  // Show lesson/exercise sections; hide the list section.
+  activeView = "lesson";
+  document.getElementById("auth-gate").classList.add("hidden");
   document.getElementById("lesson-list-section").classList.add("hidden");
   document.getElementById("lesson-section").classList.remove("hidden");
   document.getElementById("exercise-section").classList.remove("hidden");
@@ -190,7 +201,13 @@ async function loadLesson() {
   const backLink = document.getElementById("back-to-lessons");
   if (backLink) backLink.textContent = t().backToLessons;
 
-  const res = await fetch(`/api/lessons/${encodeURIComponent(LESSON_SLUG)}`);
+  const res = await fetch(`/api/lessons/${encodeURIComponent(LESSON_SLUG)}`, {
+    headers: window.Coach.authHeaders(),
+  });
+  if (res.status === 401) {
+    window.Coach.logout();
+    return;
+  }
   if (!res.ok) {
     document.getElementById("lesson-title").textContent = t().lessonNotFound;
     return;
@@ -218,10 +235,7 @@ async function loadLesson() {
 
 // Re-render every locale-dependent surface. Safe to call on load and on switch.
 function renderProse() {
-  document.querySelectorAll(".lang-switch button").forEach((b) => {
-    b.classList.toggle("active", b.dataset.locale === locale);
-  });
-  document.documentElement.lang = locale;
+  syncLangChrome();
   document.getElementById("editor-label").textContent = t().editorLabel;
   document.getElementById("results-heading").textContent = t().resultsHeading;
 
@@ -242,22 +256,19 @@ function renderProse() {
   );
 
   const btn = document.getElementById("check-btn");
-  if (!btn.disabled) btn.textContent = t().check;
+  if (btn.textContent !== t().checking) btn.textContent = t().check;
   if (lastResults) renderResults(lastResults);
   renderProgressBadge();
-  renderCheckGate();
 }
 
 async function refreshProgress() {
-  // Progress is per-account and protected; only fetch it when logged in.
-  if (!window.Coach.isLoggedIn()) {
-    lastProgress = null;
-    renderProgressBadge();
-    return;
-  }
   const res = await fetch(`/api/progress/${currentExerciseId}`, {
     headers: window.Coach.authHeaders(),
   });
+  if (res.status === 401) {
+    window.Coach.logout();
+    return;
+  }
   if (!res.ok) return;
   lastProgress = await res.json();
   renderProgressBadge();
@@ -265,7 +276,7 @@ async function refreshProgress() {
 
 function renderProgressBadge() {
   const badge = document.getElementById("progress-badge");
-  if (!window.Coach.isLoggedIn() || !lastProgress) {
+  if (!lastProgress) {
     badge.textContent = "";
     return;
   }
@@ -277,33 +288,7 @@ function renderProgressBadge() {
       : t().notAttempted;
 }
 
-// Gate the Check button behind login: when logged out, disable it and show a
-// "log in to check" prompt that opens the auth modal.
-function renderCheckGate() {
-  const btn = document.getElementById("check-btn");
-  const prompt = document.getElementById("login-prompt");
-  if (!btn || !prompt) return;
-  // The button label is always the localized "Check"; login state is conveyed
-  // by the disabled attribute + the adjacent login prompt, not by the label.
-  if (btn.textContent !== t().checking) btn.textContent = t().check;
-  if (window.Coach.isLoggedIn()) {
-    btn.disabled = false;
-    btn.removeAttribute("title");
-    prompt.classList.add("hidden");
-    return;
-  }
-  btn.disabled = true;
-  btn.title = t().loginRequired;
-  prompt.textContent = t().loginToCheck;
-  prompt.classList.remove("hidden");
-}
-
 async function check() {
-  // Submitting requires auth: prompt to log in rather than firing a 401.
-  if (!window.Coach.isLoggedIn()) {
-    window.Coach.openAuth();
-    return;
-  }
   const btn = document.getElementById("check-btn");
   btn.disabled = true;
   btn.textContent = t().checking;
@@ -313,10 +298,9 @@ async function check() {
       headers: { "Content-Type": "application/json", ...window.Coach.authHeaders() },
       body: JSON.stringify({ exercise_id: currentExerciseId, code: editor.getValue() }),
     });
-    // Token expired/invalid: drop it and ask the user to log in again.
+    // Token expired/invalid: drop it and bounce to the auth gate.
     if (res.status === 401) {
       window.Coach.logout();
-      window.Coach.openAuth();
       return;
     }
     const data = await res.json();
@@ -379,17 +363,56 @@ function switchLocale(next) {
   locale = next;
   localStorage.setItem(LOCALE_KEY, next);
   window.Coach.renderAuthChrome();
+  syncLangChrome();
   // Re-render whichever view is active.
-  if (LESSON_SLUG) {
+  if (activeView === "lesson") {
     renderProse();
-  } else {
+  } else if (activeView === "list") {
     renderList();
   }
 }
 
-// Publish lesson-view callbacks for auth.js to call on auth state changes.
-window.Coach.renderCheckGate = renderCheckGate;
-window.Coach.refreshProgress = refreshProgress;
+// ── Router / auth gate ───────────────────────────────────────────────────────
+
+// Render the content view the URL asks for. Caller guarantees the user is
+// authenticated; this never runs while logged out.
+async function renderRequestedView() {
+  if (LESSON_SLUG) {
+    await loadLesson();
+  } else {
+    // Both / and /lessons (when authenticated) show the lessons list. Keep the
+    // list on its own /lessons URL so the landing and the list are distinct.
+    if (!IS_LESSONS_PATH) {
+      window.history.replaceState(null, "", "/lessons");
+    }
+    await loadList();
+  }
+}
+
+// Post-login router (called by auth.js after a successful login): return the
+// user to the lesson they deep-linked, else show the lessons list.
+async function onAuthenticated() {
+  const stashed = sessionStorage.getItem(REDIRECT_KEY);
+  if (stashed) {
+    sessionStorage.removeItem(REDIRECT_KEY);
+    window.location.href = stashed; // full nav so ?lesson= drives the lesson view
+    return;
+  }
+  if (LESSON_SLUG) {
+    await loadLesson();
+    return;
+  }
+  await renderRequestedView();
+}
+
+// Post-logout router: collapse to the auth gate without leaking the URL's view.
+function onLoggedOut() {
+  window.Coach.showAuthGate();
+  syncLangChrome();
+}
+
+window.Coach.onAuthenticated = onAuthenticated;
+window.Coach.onLoggedOut = onLoggedOut;
 
 // ── Boot ───────────────────────────────────────────────────────────────────
 
@@ -397,17 +420,26 @@ document.getElementById("check-btn").addEventListener("click", check);
 document.querySelectorAll(".lang-switch button").forEach((b) => {
   b.addEventListener("click", () => switchLocale(b.dataset.locale));
 });
-// Auth event listeners are wired by auth.js (loaded first) — no call needed here.
 
-// Restore session on load: if a token is stored, fetch the user; then render.
 async function boot() {
-  if (window.Coach.isLoggedIn()) await window.Coach.loadCurrentUser();
-  window.Coach.renderAuthChrome();
-  if (LESSON_SLUG) {
-    await loadLesson();
-  } else {
-    await loadList();
+  syncLangChrome();
+  if (!window.Coach.isLoggedIn()) {
+    // Logged out: stash a deep-linked destination and show the gate. No content.
+    if (LESSON_SLUG || IS_LESSONS_PATH) {
+      sessionStorage.setItem(REDIRECT_KEY, window.location.pathname + window.location.search);
+    }
+    activeView = "auth";
+    window.Coach.showAuthGate();
+    return;
   }
+  // Token present: confirm it resolves to a user, then render the requested view.
+  await window.Coach.loadCurrentUser();
+  if (!window.Coach.isLoggedIn()) {
+    // loadCurrentUser hit a 401 and logged us out -> gate already shown.
+    return;
+  }
+  window.Coach.renderAuthChrome();
+  await renderRequestedView();
 }
 
 boot();

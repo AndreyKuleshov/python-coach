@@ -1,8 +1,9 @@
 """Auth endpoints: register, confirm email, login, current user.
 
 Transport layer: maps the auth use-case outcomes/exceptions to HTTP and shapes
-the response DTOs. Lesson browsing stays public; submit/progress are protected
-via the CurrentUserDep dependency (wired in those routers).
+the response DTOs. These auth routes are the ONLY public endpoints; all
+content (lessons, submissions, progress) is protected via the CurrentUserDep
+dependency (wired in those routers).
 """
 
 import html

@@ -1,27 +1,25 @@
-"""Regression tests for view-management and locale-pick correctness.
+"""Regression tests for the auth-gate access model + section/locale correctness.
 
-Guards two classes of bugs introduced by the auth refactor (app.js/auth.js split):
+Access model under test (CONTEXT.md): NO content is reachable while logged out.
+Every route renders the inline auth gate (login/register) until a valid token
+exists; the lessons list is its own authenticated /lessons view.
 
-  1. Mutual exclusivity of content sections and auth-modal sub-states.
-     Before the fix, `login-form` lacked `class="hidden"` in the HTML, meaning
-     JS had to rely solely on the parent modal being hidden to suppress it.  A
-     test that asserts the element's own CSS class (not parent visibility) would
-     fail on the unfixed HTML but pass once the element starts hidden.
+Guards:
+  1. Logged-out `/` shows the auth form and NO lesson list / content.
+  2. A logged-out deep link (/lessons or /?lesson=...) lands on the auth form,
+     not the content (no leak).
+  3. After login the lessons list appears (its own view); logout returns to the
+     auth form.
+  4. Authenticated section exclusivity + locale-pick correctness for titles.
 
-  2. Locale-picking for localised title fields.
-     The exercise and lesson title fields carry `{en, ru}` objects from the API.
-     Inserting such an object directly into the DOM produces `[object Object]`.
-     Asserting the rendered text equals the expected locale string catches any
-     future removal of the `pick()` call in the render path.
-
-These tests run against the live uvicorn server; all navigation is logged-out
-(no token seeded) except where a fixture adds one.  The `functions-first-class`
-lesson slug is used for the screenshot and title assertions because it is a
-real, published lesson in the shared dev DB that the CI server serves.
+The `functions-first-class` slug is a real, published lesson in the shared dev
+DB used for the authenticated title assertions.
 """
 
 import pytest
 from playwright.sync_api import Browser, BrowserContext, Page, expect
+
+from fixtures import SeededUser
 
 pytestmark = [pytest.mark.ui]
 
@@ -40,103 +38,122 @@ def _fresh_page(browser: Browser) -> tuple[BrowserContext, Page]:
     return ctx, ctx.new_page()
 
 
-# ── Section visibility on list view ─────────────────────────────────────────
+def _authed_page(browser: Browser, token: str) -> tuple[BrowserContext, Page]:
+    """A fresh context pre-seeded with a bearer token (logged-in path)."""
+    ctx = browser.new_context()
+    page = ctx.new_page()
+    page.add_init_script(f"window.localStorage.setItem('python-coach.token', '{token}');")
+    return ctx, page
 
 
-def test_list_view_section_exclusivity(browser: Browser, live_server: str) -> None:
-    """On /, the lesson-list section is visible; all other content sections are hidden.
+# ── 1. Logged out: the gate, never content ──────────────────────────────────
 
-    Guards against a regression where lesson/exercise sections would show
-    simultaneously with the list section (or before JS populated the list).
-    """
+
+def test_logged_out_root_shows_auth_form_no_content(browser: Browser, live_server: str) -> None:
+    """On `/` while logged out, the auth form shows and NO lesson content does."""
     ctx, page = _fresh_page(browser)
     try:
         page.goto(live_server + "/")
-        # Wait until JS has populated the lesson list before asserting state.
-        page.wait_for_selector("[data-testid='lesson-list-item']")
+        # The auth gate + login form must be visible.
+        expect(page.get_by_test_id("auth-gate")).to_be_visible()
+        expect(page.get_by_test_id("login-form")).to_be_visible()
 
-        # Exactly one content section must be visible.
-        expect(page.get_by_test_id("lesson-list")).to_be_visible()
+        # No content sections may render.
+        expect(page.locator("#lesson-list-section")).to_be_hidden()
         expect(page.locator("#lesson-section")).to_be_hidden()
         expect(page.locator("#exercise-section")).to_be_hidden()
+        expect(page.get_by_test_id("lesson-list")).to_be_hidden()
+        # No list items must exist in the DOM at all.
+        expect(page.get_by_test_id("lesson-list-item")).to_have_count(0)
     finally:
         ctx.close()
 
 
-def test_auth_modal_hidden_on_load(browser: Browser, live_server: str) -> None:
-    """The auth modal must be hidden when the page first loads (logged out).
-
-    Ensures the modal's own CSS class and its effective visibility are both
-    correct — a double guard so neither the class nor a CSS specificity change
-    can slip through undetected.
-    """
+def test_logged_out_lessons_path_redirects_to_auth(browser: Browser, live_server: str) -> None:
+    """A logged-out deep link to /lessons shows the auth form, not the list."""
     ctx, page = _fresh_page(browser)
     try:
-        page.goto(live_server + "/")
-        page.wait_for_selector("[data-testid='lesson-list-item']")
-
-        modal = page.get_by_test_id("auth-modal")
-        expect(modal).to_be_hidden()
-
-        # Confirm the hidden CSS class is actually on the element itself, not
-        # only inherited from a parent, so a future CSS change cannot silently
-        # break this.
-        modal_class = modal.get_attribute("class") or ""
-        assert "hidden" in modal_class, (
-            f"auth-modal must carry its own 'hidden' class on load; got: '{modal_class}'"
-        )
+        page.goto(live_server + "/lessons")
+        expect(page.get_by_test_id("auth-gate")).to_be_visible()
+        expect(page.get_by_test_id("login-form")).to_be_visible()
+        expect(page.locator("#lesson-list-section")).to_be_hidden()
+        expect(page.get_by_test_id("lesson-list-item")).to_have_count(0)
     finally:
         ctx.close()
 
 
-# ── Auth modal sub-state exclusivity ────────────────────────────────────────
+def test_logged_out_lesson_deep_link_redirects_to_auth(browser: Browser, live_server: str) -> None:
+    """A logged-out deep link to a lesson shows the auth form, leaking no content."""
+    ctx, page = _fresh_page(browser)
+    try:
+        page.goto(f"{live_server}/?lesson={_REAL_SLUG}")
+        expect(page.get_by_test_id("auth-gate")).to_be_visible()
+        expect(page.get_by_test_id("login-form")).to_be_visible()
+
+        # The lesson/exercise sections must stay hidden — no title leaks.
+        expect(page.locator("#lesson-section")).to_be_hidden()
+        expect(page.locator("#exercise-section")).to_be_hidden()
+        # The lesson title must NOT contain the real lesson's text.
+        expect(page.get_by_test_id("lesson-title")).not_to_contain_text(_REAL_LESSON_TITLE_EN)
+    finally:
+        ctx.close()
+
+
+# ── 2. Logged-in path: content appears; logout returns to the gate ──────────
+
+
+def test_login_then_lessons_list_appears(
+    browser: Browser, live_server: str, seeded_user: SeededUser
+) -> None:
+    """With a valid token, the lessons-list view renders and the gate is hidden."""
+    ctx, page = _authed_page(browser, seeded_user.token)
+    try:
+        page.goto(live_server + "/lessons")
+        page.wait_for_selector("[data-testid='lesson-list-item']")
+
+        expect(page.get_by_test_id("auth-gate")).to_be_hidden()
+        expect(page.get_by_test_id("lesson-list")).to_be_visible()
+        # The logged-in chrome shows the account + a logout control.
+        expect(page.get_by_test_id("logout-btn")).to_be_visible()
+    finally:
+        ctx.close()
+
+
+def test_logout_returns_to_auth_form(
+    browser: Browser, live_server: str, seeded_user: SeededUser
+) -> None:
+    """Clicking logout drops the token and returns the user to the auth form."""
+    ctx, page = _authed_page(browser, seeded_user.token)
+    try:
+        page.goto(live_server + "/lessons")
+        page.wait_for_selector("[data-testid='lesson-list-item']")
+
+        page.get_by_test_id("logout-btn").click()
+
+        # Back to the gate; content gone.
+        expect(page.get_by_test_id("auth-gate")).to_be_visible()
+        expect(page.get_by_test_id("login-form")).to_be_visible()
+        expect(page.locator("#lesson-list-section")).to_be_hidden()
+    finally:
+        ctx.close()
+
+
+# ── 3. Auth-gate sub-state exclusivity ──────────────────────────────────────
 
 
 def test_login_form_starts_with_hidden_class(browser: Browser, live_server: str) -> None:
-    """login-form must start with the 'hidden' CSS class in its own class attribute.
+    """login-form must carry its own 'hidden' class in the HTML on load.
 
-    Before the fix, login-form had no class at all: it relied solely on the
-    parent modal being hidden.  That means any code path that opened the modal
-    without calling showLoginForm() would expose the form unexpectedly.  After
-    the fix, the element's own class carries 'hidden' so the invariant holds
-    regardless of parent visibility.
-
-    This assertion checks the class attribute directly (not effective Playwright
-    visibility, which folds in parent state) so the test is sensitive to the
-    exact HTML defect described above.
+    The gate's JS reveals exactly one sub-form via showLoginForm(); the element's
+    own class must start hidden so no path exposes register/confirm-pending
+    unexpectedly. Asserted on the class attribute directly, not effective
+    visibility, so the test is sensitive to the HTML default.
     """
     ctx, page = _fresh_page(browser)
     try:
         page.goto(live_server + "/")
-        page.wait_for_selector("[data-testid='lesson-list-item']")
-
-        login_form_class = page.locator("#login-form").get_attribute("class") or ""
-        assert "hidden" in login_form_class, (
-            "login-form must carry 'hidden' in its own class attribute on load; "
-            f"got: '{login_form_class}'.  "
-            "Root cause: the element's initial class was missing in the HTML."
-        )
-    finally:
-        ctx.close()
-
-
-def test_opening_modal_shows_only_login_form(browser: Browser, live_server: str) -> None:
-    """Clicking 'Log in' shows the modal with exactly one sub-form visible.
-
-    Asserts that register-form and confirm-pending are hidden, and that only
-    login-form is visible — the single-active-sub-form invariant.
-    """
-    ctx, page = _fresh_page(browser)
-    try:
-        page.goto(live_server + "/")
-        page.wait_for_selector("[data-testid='lesson-list-item']")
-
-        page.get_by_test_id("open-auth-btn").click()
-
-        # Modal must be visible after clicking.
-        expect(page.get_by_test_id("auth-modal")).to_be_visible()
-
-        # Exactly one sub-form: login.
+        # On load the gate is shown and the login form revealed; the register and
+        # confirm-pending sub-states must remain hidden.
         expect(page.get_by_test_id("login-form")).to_be_visible()
         expect(page.get_by_test_id("register-form")).to_be_hidden()
         expect(page.get_by_test_id("confirm-pending")).to_be_hidden()
@@ -144,19 +161,30 @@ def test_opening_modal_shows_only_login_form(browser: Browser, live_server: str)
         ctx.close()
 
 
-# ── Lesson view: section exclusivity + locale-pick correctness ──────────────
-
-
-def test_lesson_view_hides_list_section(browser: Browser, live_server: str) -> None:
-    """On a lesson URL the lesson-list section must be hidden.
-
-    Guards against a regression where both the list and the lesson/exercise
-    sections would stack on screen simultaneously.
-    """
+def test_switch_to_register_shows_only_register_form(browser: Browser, live_server: str) -> None:
+    """Clicking 'Register' on the gate shows exactly the register sub-form."""
     ctx, page = _fresh_page(browser)
     try:
+        page.goto(live_server + "/")
+        page.get_by_test_id("show-register").click()
+
+        expect(page.get_by_test_id("register-form")).to_be_visible()
+        expect(page.get_by_test_id("login-form")).to_be_hidden()
+        expect(page.get_by_test_id("confirm-pending")).to_be_hidden()
+    finally:
+        ctx.close()
+
+
+# ── 4. Authenticated section exclusivity + locale-pick correctness ──────────
+
+
+def test_lesson_view_hides_list_section(
+    browser: Browser, live_server: str, seeded_user: SeededUser
+) -> None:
+    """On a lesson URL (authenticated) the lesson-list section must be hidden."""
+    ctx, page = _authed_page(browser, seeded_user.token)
+    try:
         page.goto(f"{live_server}/?lesson={_REAL_SLUG}")
-        # Wait until lesson title is populated before asserting section state.
         expect(page.get_by_test_id("lesson-title")).not_to_have_text("Loading…")
 
         expect(page.locator("#lesson-list-section")).to_be_hidden()
@@ -167,19 +195,13 @@ def test_lesson_view_hides_list_section(browser: Browser, live_server: str) -> N
 
 
 def test_lesson_title_is_localized_string_not_object(
-    browser: Browser, live_server: str
+    browser: Browser, live_server: str, seeded_user: SeededUser
 ) -> None:
-    """The lesson title must be the locale-picked string, not '[object Object]'.
-
-    '[object Object]' appears when a {en, ru} LocalizedText object is inserted
-    into the DOM without routing it through pick().  This test asserts the
-    exact expected EN text so any such regression is caught immediately.
-    """
-    ctx, page = _fresh_page(browser)
+    """The lesson title must be the locale-picked string, not '[object Object]'."""
+    ctx, page = _authed_page(browser, seeded_user.token)
     try:
         page.goto(f"{live_server}/?lesson={_REAL_SLUG}")
         lesson_title = page.get_by_test_id("lesson-title")
-        # Wait for content to load, then assert the exact expected value.
         expect(lesson_title).not_to_have_text("Loading…")
         expect(lesson_title).not_to_contain_text("[object Object]")
         expect(lesson_title).to_have_text(_REAL_LESSON_TITLE_EN)
@@ -188,19 +210,13 @@ def test_lesson_title_is_localized_string_not_object(
 
 
 def test_exercise_title_is_localized_string_not_object(
-    browser: Browser, live_server: str
+    browser: Browser, live_server: str, seeded_user: SeededUser
 ) -> None:
-    """The exercise title must be the locale-picked string, not '[object Object]'.
-
-    Same invariant as the lesson title: asserting the exact EN string catches
-    any future removal of the pick() call in renderProse().
-    """
-    ctx, page = _fresh_page(browser)
+    """The exercise title must be the locale-picked string, not '[object Object]'."""
+    ctx, page = _authed_page(browser, seeded_user.token)
     try:
         page.goto(f"{live_server}/?lesson={_REAL_SLUG}")
         exercise_title = page.get_by_test_id("exercise-title")
-        # The CodeMirror editor mounts after the exercise loads; waiting on the
-        # title is sufficient since both are set in the same renderProse() call.
         expect(exercise_title).not_to_have_text("")
         expect(exercise_title).not_to_contain_text("[object Object]")
         expect(exercise_title).to_have_text(_REAL_EXERCISE_TITLE_EN)
@@ -211,21 +227,16 @@ def test_exercise_title_is_localized_string_not_object(
 # ── Screenshot for human verification ───────────────────────────────────────
 
 
-def test_fe_fix_screenshot(browser: Browser, live_server: str) -> None:
-    """Capture a screenshot of the lesson page for eyeball verification.
-
-    Saved to /tmp/fe_fix.png as requested.  The assertions here are the same
-    invariants as the individual tests above, kept together so the screenshot
-    reflects the verified state.
-    """
-    ctx, page = _fresh_page(browser)
+def test_fe_fix_screenshot(browser: Browser, live_server: str, seeded_user: SeededUser) -> None:
+    """Capture a screenshot of the authenticated lesson page for eyeball checks."""
+    ctx, page = _authed_page(browser, seeded_user.token)
     try:
         page.goto(f"{live_server}/?lesson={_REAL_SLUG}")
         expect(page.get_by_test_id("lesson-title")).not_to_have_text("Loading…")
         expect(page.get_by_test_id("lesson-title")).not_to_contain_text("[object Object]")
         expect(page.get_by_test_id("exercise-title")).not_to_contain_text("[object Object]")
         expect(page.locator("#lesson-list-section")).to_be_hidden()
-        expect(page.get_by_test_id("auth-modal")).to_be_hidden()
+        expect(page.get_by_test_id("auth-gate")).to_be_hidden()
 
         page.screenshot(path="/tmp/fe_fix.png", full_page=True)
     finally:

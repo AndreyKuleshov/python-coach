@@ -2,9 +2,12 @@
   - GET /api/lessons        — published lesson list (no body/exercises/tests/solution_code)
   - GET /api/lessons/{slug} — full lesson with exercises (no test sources/solution_code)
 
-Drives the real app + DB via ASGITransport. The load-bearing assertion here is
-that test sources — visible *and* hidden — never leak to the frontend: the
-`ExerciseDTO` deliberately omits them (anti-cheat).
+Both endpoints REQUIRE a bearer token: no lesson content is reachable while
+logged out (see test_requires_auth.py for the 401 regressions). Tests that need
+the data drive the real app + DB via the authenticated `auth_client` over
+ASGITransport. The load-bearing assertion here is that test sources — visible
+*and* hidden — never leak to the frontend: the `ExerciseDTO` deliberately omits
+them (anti-cheat).
 """
 
 import httpx
@@ -17,10 +20,10 @@ pytestmark = [pytest.mark.db]
 
 @pytest.mark.smoke
 async def test_list_returns_published_lessons_only(
-    client: httpx.AsyncClient, seed_exercise: SeededExercise
+    auth_client: httpx.AsyncClient, seed_exercise: SeededExercise
 ) -> None:
     """GET /api/lessons returns only published lessons; unpublished ones are absent."""
-    res = await client.get("/api/lessons")
+    res = await auth_client.get("/api/lessons")
 
     assert res.status_code == 200
     body = res.json()
@@ -31,10 +34,10 @@ async def test_list_returns_published_lessons_only(
 
 
 async def test_list_items_carry_bilingual_titles(
-    client: httpx.AsyncClient, seed_exercise: SeededExercise
+    auth_client: httpx.AsyncClient, seed_exercise: SeededExercise
 ) -> None:
     """Each list item has slug, position, and bilingual title — nothing more."""
-    res = await client.get("/api/lessons")
+    res = await auth_client.get("/api/lessons")
 
     assert res.status_code == 200
     body = res.json()
@@ -49,7 +52,7 @@ async def test_list_items_carry_bilingual_titles(
 
 @pytest.mark.regression
 async def test_list_never_leaks_body_or_exercises(
-    client: httpx.AsyncClient, seed_exercise: SeededExercise
+    auth_client: httpx.AsyncClient, seed_exercise: SeededExercise
 ) -> None:
     """The list payload must not expose body_md, exercises, tests, or solution_code.
 
@@ -57,7 +60,7 @@ async def test_list_never_leaks_body_or_exercises(
     differently-named leak is still caught: the list contract is slug + title +
     position and nothing more.
     """
-    res = await client.get("/api/lessons")
+    res = await auth_client.get("/api/lessons")
 
     assert res.status_code == 200
     raw = res.text
@@ -81,14 +84,14 @@ async def test_list_never_leaks_body_or_exercises(
 
 @pytest.mark.regression
 async def test_list_is_ordered_by_position(
-    client: httpx.AsyncClient, seed_ordered_pair: SeededPair
+    auth_client: httpx.AsyncClient, seed_ordered_pair: SeededPair
 ) -> None:
     """Published lessons come back ordered by `position`, not by insert/id order.
 
     The fixture inserts the high-position lesson first; the API must still place
     the low-position lesson ahead of it.
     """
-    res = await client.get("/api/lessons")
+    res = await auth_client.get("/api/lessons")
     assert res.status_code == 200
 
     slugs = [item["slug"] for item in res.json()]
@@ -99,10 +102,10 @@ async def test_list_is_ordered_by_position(
 
 @pytest.mark.smoke
 async def test_get_existing_lesson_returns_exercises(
-    client: httpx.AsyncClient, seed_exercise: SeededExercise
+    auth_client: httpx.AsyncClient, seed_exercise: SeededExercise
 ) -> None:
     """A seeded, published lesson is returned with its ordered exercises."""
-    res = await client.get(f"/api/lessons/{seed_exercise.lesson_slug}")
+    res = await auth_client.get(f"/api/lessons/{seed_exercise.lesson_slug}")
 
     assert res.status_code == 200
     body = res.json()
@@ -121,15 +124,15 @@ async def test_get_existing_lesson_returns_exercises(
     assert ex["starter_code"] == "def answer():\n    return 0\n"
 
 
-async def test_get_missing_lesson_is_404(client: httpx.AsyncClient) -> None:
+async def test_get_missing_lesson_is_404(auth_client: httpx.AsyncClient) -> None:
     """An unknown slug yields a 404, not an empty 200."""
-    res = await client.get("/api/lessons/this-slug-does-not-exist-zzz")
+    res = await auth_client.get("/api/lessons/this-slug-does-not-exist-zzz")
     assert res.status_code == 404
 
 
 @pytest.mark.regression
 async def test_lesson_response_never_leaks_test_sources(
-    client: httpx.AsyncClient, seed_exercise: SeededExercise
+    auth_client: httpx.AsyncClient, seed_exercise: SeededExercise
 ) -> None:
     """Neither visible nor hidden pytest sources appear anywhere in the payload.
 
@@ -137,7 +140,7 @@ async def test_lesson_response_never_leaks_test_sources(
     `tests` field. We assert structurally (no key) AND on the raw bytes (the
     test filenames / `from solution import` must not appear at all).
     """
-    res = await client.get(f"/api/lessons/{seed_exercise.lesson_slug}")
+    res = await auth_client.get(f"/api/lessons/{seed_exercise.lesson_slug}")
     assert res.status_code == 200
 
     ex = res.json()["exercises"][0]
@@ -152,14 +155,14 @@ async def test_lesson_response_never_leaks_test_sources(
 
 @pytest.mark.regression
 async def test_lesson_response_never_leaks_solution_code(
-    client: httpx.AsyncClient, seed_exercise: SeededExercise
+    auth_client: httpx.AsyncClient, seed_exercise: SeededExercise
 ) -> None:
     """The hidden reference `solution_code` is stored but never sent to the frontend.
 
     Same secrecy class as hidden test sources: the ExerciseDTO has no
     `solution_code` field, and the seeded sentinel must not appear in the bytes.
     """
-    res = await client.get(f"/api/lessons/{seed_exercise.lesson_slug}")
+    res = await auth_client.get(f"/api/lessons/{seed_exercise.lesson_slug}")
     assert res.status_code == 200
 
     ex = res.json()["exercises"][0]

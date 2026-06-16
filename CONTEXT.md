@@ -18,7 +18,8 @@ are shown and stored.
 - **Registered accounts.** Login is by **email + password**; the email must be
   **confirmed** before login. Progress and submissions are tracked **per
   account**. The platform is still effectively single-owner, but it is no longer
-  anonymous: reading lessons is public, but checking a solution requires login.
+  anonymous: **no content is reachable without logging in** — lessons, exercises,
+  submissions and progress all require a valid token.
 - Intermediate developer learning AQA: decorators, generators, context managers,
   function arguments, OOP/dunder methods — all leaning toward pytest and test
   automation.
@@ -34,9 +35,28 @@ are shown and stored.
 - **Login** verifies the Argon2 hash; an unconfirmed account is rejected (403),
   a confirmed one receives a **JWT bearer access token** (HS256, `JWT_SECRET`,
   with an expiry).
-- **Protected:** `POST /api/submissions` and the progress endpoints require the
-  bearer token and are keyed to the current user. **Public:** lesson browsing
-  (`GET /api/lessons`, `GET /api/lessons/{slug}`).
+- **Protected (everything content-related):** the lesson endpoints
+  (`GET /api/lessons`, `GET /api/lessons/{slug}`), `POST /api/submissions`, and
+  the progress endpoints all require the bearer token; lesson reads validate the
+  token but are not keyed to the user, while submissions/progress are keyed to
+  the current user. A request without/with an invalid token → **401**.
+- **Public (the only unauthenticated endpoints):** the auth routes —
+  `POST /api/auth/register`, `GET /api/auth/confirm`, `POST /api/auth/login`
+  (`GET /api/auth/me` resolves the current user from the token).
+
+### Access model on the frontend
+
+- A **logged-out visitor sees only the inline auth form** (login/register) on
+  every route — never the lesson list, never a lesson. `/` is the landing: it
+  shows the auth form when logged out and redirects to the lessons list when
+  authenticated.
+- The **lessons list is its own authenticated view at `/lessons`** (distinct
+  from the landing). A backend SPA catch-all serves the same shell for `/lessons`
+  so the JS router can resolve it; the JS gates the view behind a token.
+- A **logged-out deep link** (`/lessons` or `/?lesson=<slug>`) lands on the auth
+  form, not the content; the requested path is stashed so a successful login
+  returns the user to it (else to `/lessons`). **After logout** — or if any
+  authenticated fetch returns 401 — the UI drops back to the auth form.
 
 ## Target skill: AQA
 
@@ -84,12 +104,15 @@ Browser (static lesson page, CodeMirror editor)
   │  GET  /api/auth/confirm?token=...  → is_email_confirmed = true
   │  POST /api/auth/login {email,password} → JWT bearer access token (localStorage)
   │
-  │  GET /api/lessons/{slug}   (public, no token)
+  │  GET /api/lessons  /  GET /api/lessons/{slug}  + Authorization: Bearer <jwt>
+  │     (authenticated-only — 401 without a valid token; no content leaks)
+  ▼
+transport/deps.get_current_user → resolves/validates the bearer token (401 if absent/invalid)
   ▼
 transport/rest/lessons → controllers/lessons.get_lesson → storage (LessonsMixin)
   │  renders markdown + exercises (test sources NOT sent)
   │
-  │  user writes code, clicks "Check"  (requires login)
+  │  user writes code, clicks "Check"
   │  POST /api/submissions {exercise_id, code}  + Authorization: Bearer <jwt>
   ▼
 transport/deps.get_current_user → resolves User from the bearer token (401 if absent/invalid)

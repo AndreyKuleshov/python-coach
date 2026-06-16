@@ -20,7 +20,7 @@ tests (safe under pytest-xdist).
 import pytest
 from playwright.sync_api import expect
 
-from fixtures import LocalePageFactory, SeededLesson
+from fixtures import LocalePageFactory, SeededLesson, SeededUser
 from i18n_page import LessonView, ListView
 
 pytestmark = [pytest.mark.ui]
@@ -51,12 +51,13 @@ _BASICS_TITLE = {"en": "Decorators: the basics", "ru": "Декораторы: о
 def test_list_default_locale_follows_browser(
     locale_page_factory: LocalePageFactory,
     live_server: str,
+    seeded_user: SeededUser,
     browser_locale: str,
     expected: str,
 ) -> None:
     """On the list view, the initial locale follows navigator.language (EN fallback)."""
     page = locale_page_factory.open(browser_locale)
-    view = ListView(page, base_url=live_server).open()
+    view = ListView(page, base_url=live_server, token=seeded_user.token).open()
 
     expect(view.heading).to_have_text(_LIST_HEADING[expected])
     expect(view.item_by_slug(_BASICS_SLUG)).to_contain_text(_BASICS_TITLE[expected])
@@ -71,12 +72,15 @@ def test_lesson_default_locale_follows_browser(
     locale_page_factory: LocalePageFactory,
     live_server: str,
     seeded_lesson: SeededLesson,
+    seeded_user: SeededUser,
     browser_locale: str,
     expected: str,
 ) -> None:
     """On the lesson view, the initial locale follows navigator.language (EN fallback)."""
     page = locale_page_factory.open(browser_locale)
-    view = LessonView(page, base_url=live_server, lesson_slug=seeded_lesson.slug).open()
+    view = LessonView(
+        page, base_url=live_server, lesson_slug=seeded_lesson.slug, token=seeded_user.token
+    ).open()
 
     expect(view.lesson_title).to_have_text(_LESSON_TITLE[expected])
     expect(view.editor_label).to_have_text(_EDITOR_LABEL[expected])
@@ -86,11 +90,11 @@ def test_lesson_default_locale_follows_browser(
 
 
 def test_list_toggle_swaps_prose_and_chrome(
-    locale_page_factory: LocalePageFactory, live_server: str
+    locale_page_factory: LocalePageFactory, live_server: str, seeded_user: SeededUser
 ) -> None:
     """EN->RU->EN on the list view retitles items AND the heading instantly."""
     page = locale_page_factory.open("en-US")
-    view = ListView(page, base_url=live_server).open()
+    view = ListView(page, base_url=live_server, token=seeded_user.token).open()
     basics = view.item_by_slug(_BASICS_SLUG)
 
     expect(view.heading).to_have_text(_LIST_HEADING["en"])
@@ -109,10 +113,13 @@ def test_lesson_toggle_swaps_prose_and_chrome(
     locale_page_factory: LocalePageFactory,
     live_server: str,
     seeded_lesson: SeededLesson,
+    seeded_user: SeededUser,
 ) -> None:
     """EN->RU on the lesson view swaps lesson prose AND every chrome string."""
     page = locale_page_factory.open("en-US")
-    view = LessonView(page, base_url=live_server, lesson_slug=seeded_lesson.slug).open()
+    view = LessonView(
+        page, base_url=live_server, lesson_slug=seeded_lesson.slug, token=seeded_user.token
+    ).open()
 
     # Start in EN: prose + chrome.
     expect(view.lesson_title).to_have_text(_LESSON_TITLE["en"])
@@ -135,10 +142,13 @@ def test_lesson_toggle_keeps_editor_input(
     locale_page_factory: LocalePageFactory,
     live_server: str,
     seeded_lesson: SeededLesson,
+    seeded_user: SeededUser,
 ) -> None:
     """A locale switch must not rebuild the editor or drop the learner's edits."""
     page = locale_page_factory.open("en-US")
-    view = LessonView(page, base_url=live_server, lesson_slug=seeded_lesson.slug).open()
+    view = LessonView(
+        page, base_url=live_server, lesson_slug=seeded_lesson.slug, token=seeded_user.token
+    ).open()
 
     sentinel = "# my-work-in-progress\n"
     view.type_into_editor(sentinel)
@@ -154,12 +164,12 @@ def test_lesson_toggle_keeps_editor_input(
 
 
 def test_choice_persists_across_reload_overriding_browser(
-    locale_page_factory: LocalePageFactory, live_server: str
+    locale_page_factory: LocalePageFactory, live_server: str, seeded_user: SeededUser
 ) -> None:
     """A manual RU choice in an EN browser persists in localStorage and survives reload."""
     # Browser default is EN; the user manually picks RU.
     page = locale_page_factory.open("en-US")
-    view = ListView(page, base_url=live_server).open()
+    view = ListView(page, base_url=live_server, token=seeded_user.token).open()
     expect(view.heading).to_have_text(_LIST_HEADING["en"])
 
     view.lang.to_ru()
@@ -175,6 +185,7 @@ def test_choice_survives_fresh_navigation_to_lesson(
     locale_page_factory: LocalePageFactory,
     live_server: str,
     seeded_lesson: SeededLesson,
+    seeded_user: SeededUser,
 ) -> None:
     """A RU choice on the list view carries to a fresh navigation into a lesson.
 
@@ -182,11 +193,13 @@ def test_choice_survives_fresh_navigation_to_lesson(
     choice must still win after navigating to a different page.
     """
     page = locale_page_factory.open("en-US")
-    list_view = ListView(page, base_url=live_server).open()
+    list_view = ListView(page, base_url=live_server, token=seeded_user.token).open()
     list_view.lang.to_ru()
     assert list_view.lang.persisted_locale() == "ru"
 
     # Fresh navigation (not a reload) to the lesson view, same storage.
-    lesson_view = LessonView(page, base_url=live_server, lesson_slug=seeded_lesson.slug).open()
+    lesson_view = LessonView(
+        page, base_url=live_server, lesson_slug=seeded_lesson.slug, token=seeded_user.token
+    ).open()
     expect(lesson_view.lesson_title).to_have_text(_LESSON_TITLE["ru"])
     expect(lesson_view.editor_label).to_have_text(_EDITOR_LABEL["ru"])

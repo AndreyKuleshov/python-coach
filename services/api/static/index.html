@@ -16,9 +16,9 @@
     <header>
       <h1>python-coach <span class="tag">MVP skeleton</span></h1>
       <div class="header-right">
-        <!-- Auth controls: logged-out shows a "Log in" trigger; logged-in shows email + logout. -->
+        <!-- Auth controls: logged-out shows nothing here (the auth form is the
+             page itself); logged-in shows email + logout. -->
         <span id="auth-status" class="auth-status">
-          <button type="button" id="open-auth-btn" data-testid="open-auth-btn">Log in</button>
           <span id="auth-user" class="auth-user hidden">
             <span id="auth-email" data-testid="auth-email"></span>
             <button type="button" id="logout-btn" data-testid="logout-btn">Log out</button>
@@ -31,59 +31,62 @@
       </div>
     </header>
 
-    <!-- Auth modal: login + register, toggled. Hidden until "Log in" is clicked. -->
-    <div id="auth-modal" class="modal hidden" data-testid="auth-modal">
-      <div class="modal-card">
-        <button type="button" id="auth-close-btn" class="modal-close" data-testid="auth-close-btn">×</button>
-
-        <!-- Login form: starts hidden; showLoginForm() in auth.js reveals it. -->
-        <form id="login-form" class="hidden" data-testid="login-form">
-          <h2 id="login-heading">Log in</h2>
-          <label id="login-email-label" for="login-email">Email</label>
-          <input type="email" id="login-email" data-testid="login-email" autocomplete="email" />
-          <label id="login-password-label" for="login-password">Password</label>
-          <input type="password" id="login-password" data-testid="login-password" autocomplete="current-password" />
-          <button type="submit" id="login-submit" data-testid="login-submit">Log in</button>
-          <p id="login-error" class="form-error hidden" data-testid="login-error"></p>
-          <p class="form-switch">
-            <span id="login-switch-prompt">No account?</span>
-            <a href="#" id="show-register" data-testid="show-register">Register</a>
-          </p>
-        </form>
-
-        <!-- Register form -->
-        <form id="register-form" class="hidden" data-testid="register-form">
-          <h2 id="register-heading">Register</h2>
-          <label id="register-email-label" for="register-email">Email</label>
-          <input type="email" id="register-email" data-testid="register-email" autocomplete="email" />
-          <label id="register-password-label" for="register-password">Password</label>
-          <input type="password" id="register-password" data-testid="register-password" autocomplete="new-password" />
-          <button type="submit" id="register-submit" data-testid="register-submit">Register</button>
-          <p id="register-error" class="form-error hidden" data-testid="register-error"></p>
-          <p class="form-switch">
-            <span id="register-switch-prompt">Have an account?</span>
-            <a href="#" id="show-login" data-testid="show-login">Log in</a>
-          </p>
-        </form>
-
-        <!-- "Check your email" confirmation-pending state -->
-        <div id="confirm-pending" class="hidden" data-testid="confirm-pending">
-          <h2 id="confirm-pending-heading">Check your email</h2>
-          <p id="confirm-pending-text" data-testid="confirm-pending-text"></p>
-        </div>
-      </div>
-    </div>
-
     <main>
-      <!-- LIST VIEW: shown when there is no ?lesson= query param -->
+      <!-- AUTH GATE: the only content a logged-out visitor ever sees. Holds the
+           login + register forms inline (NOT a modal). Shown on every route
+           while logged out; hidden once authenticated. -->
+      <section id="auth-gate" class="auth-gate hidden" data-testid="auth-gate">
+        <div class="auth-card">
+          <!-- Login form: starts hidden; showLoginForm() in auth.js reveals it. -->
+          <form id="login-form" class="hidden" data-testid="login-form">
+            <h2 id="login-heading">Log in</h2>
+            <label id="login-email-label" for="login-email">Email</label>
+            <input type="email" id="login-email" data-testid="login-email" autocomplete="email" />
+            <label id="login-password-label" for="login-password">Password</label>
+            <input type="password" id="login-password" data-testid="login-password" autocomplete="current-password" />
+            <button type="submit" id="login-submit" data-testid="login-submit">Log in</button>
+            <p id="login-error" class="form-error hidden" data-testid="login-error"></p>
+            <p class="form-switch">
+              <span id="login-switch-prompt">No account?</span>
+              <a href="#" id="show-register" data-testid="show-register">Register</a>
+            </p>
+          </form>
+
+          <!-- Register form -->
+          <form id="register-form" class="hidden" data-testid="register-form">
+            <h2 id="register-heading">Register</h2>
+            <label id="register-email-label" for="register-email">Email</label>
+            <input type="email" id="register-email" data-testid="register-email" autocomplete="email" />
+            <label id="register-password-label" for="register-password">Password</label>
+            <input type="password" id="register-password" data-testid="register-password" autocomplete="new-password" />
+            <button type="submit" id="register-submit" data-testid="register-submit">Register</button>
+            <p id="register-error" class="form-error hidden" data-testid="register-error"></p>
+            <p class="form-switch">
+              <span id="register-switch-prompt">Have an account?</span>
+              <a href="#" id="show-login" data-testid="show-login">Log in</a>
+            </p>
+          </form>
+
+          <!-- "Check your email" confirmation-pending state -->
+          <div id="confirm-pending" class="hidden" data-testid="confirm-pending">
+            <h2 id="confirm-pending-heading">Check your email</h2>
+            <p id="confirm-pending-text" data-testid="confirm-pending-text"></p>
+            <p class="form-switch">
+              <a href="#" id="confirm-back-to-login" data-testid="confirm-back-to-login">Log in</a>
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- LIST VIEW: the authenticated lessons list (its own /lessons route). -->
       <section id="lesson-list-section" class="hidden">
         <h2 id="list-heading" data-testid="list-heading">Lessons</h2>
         <ul id="lesson-list" data-testid="lesson-list" class="lesson-list"></ul>
       </section>
 
-      <!-- LESSON VIEW: shown when ?lesson=<slug> is present -->
+      <!-- LESSON VIEW: shown when ?lesson=<slug> is present (authenticated). -->
       <section id="lesson-section" class="hidden">
-        <a id="back-to-lessons" href="/" data-testid="back-to-lessons" class="back-link">← Back to lessons</a>
+        <a id="back-to-lessons" href="/lessons" data-testid="back-to-lessons" class="back-link">← Back to lessons</a>
         <h2 id="lesson-title" data-testid="lesson-title">Loading…</h2>
         <div id="lesson-body" class="markdown" data-testid="lesson-body"></div>
       </section>
@@ -98,7 +101,6 @@
         <div class="controls">
           <button id="check-btn" data-testid="check-btn">Check</button>
           <span id="progress-badge" class="badge" data-testid="progress-badge"></span>
-          <a href="#" id="login-prompt" class="login-prompt hidden" data-testid="login-prompt"></a>
         </div>
 
         <div id="results" class="results hidden" data-testid="results-panel">
@@ -108,7 +110,7 @@
         </div>
       </section>
     </main>
-    <!-- auth.js must load before app.js: it populates window.Coach with token/modal
+    <!-- auth.js must load before app.js: it populates window.Coach with token/auth
          helpers that app.js reads immediately on execution. -->
     <script src="/static/auth.js"></script>
     <script src="/static/app.js"></script>

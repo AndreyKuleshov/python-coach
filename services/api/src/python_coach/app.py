@@ -47,11 +47,20 @@ def create_app() -> FastAPI:
         return {"status": "ok"}
 
     if _STATIC_DIR.is_dir():
+        index_file = _STATIC_DIR / "index.html"
 
         @app.get("/", include_in_schema=False)
         async def index() -> FileResponse:
-            """Serve the single-page lesson UI."""
-            return FileResponse(_STATIC_DIR / "index.html")
+            """Serve the SPA shell (auth landing when logged out)."""
+            return FileResponse(index_file)
+
+        # SPA catch-all for client-routed views (e.g. /lessons). Real API and
+        # /static paths are matched by their routers first; only unmatched GETs
+        # fall through here and get the same shell, which the JS router resolves.
+        @app.get("/lessons", include_in_schema=False)
+        async def lessons_view() -> FileResponse:
+            """Serve the SPA shell for the authenticated lessons-list view."""
+            return FileResponse(index_file)
 
         app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")
 

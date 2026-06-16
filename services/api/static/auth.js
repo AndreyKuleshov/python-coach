@@ -1,17 +1,19 @@
 "use strict";
 
-// Auth-UI block: token helpers, auth modal, login/register handlers, auth chrome.
+// Auth-UI block: token helpers, the inline auth gate, login/register handlers,
+// and the logged-in/out header chrome.
 //
 // Loaded before app.js. Writes public functions into window.Coach so app.js can
-// call them without relying on implicit globals, and reads Coach.* callbacks that
-// app.js registers for the reverse direction (renderCheckGate, refreshProgress).
+// call them without relying on implicit globals, and reads Coach.* callbacks
+// that app.js registers for the reverse direction (the post-login router).
 //
 // Load order in index.html: auth.js → app.js.
 // Shared namespace contract:
-//   auth.js writes: Coach.isLoggedIn, Coach.authHeaders, Coach.openAuth,
-//                   Coach.logout, Coach.renderAuthChrome, Coach.refreshAuthDependentUI
-//   app.js writes:  Coach.t (locale getter), Coach.lessonSlug,
-//                   Coach.renderCheckGate, Coach.refreshProgress
+//   auth.js writes: Coach.isLoggedIn, Coach.authHeaders, Coach.logout,
+//                   Coach.showAuthGate, Coach.hideAuthGate, Coach.renderAuthChrome,
+//                   Coach.loadCurrentUser
+//   app.js writes:  Coach.t (locale getter), Coach.onAuthenticated (router),
+//                   Coach.onLoggedOut (router)
 
 // Initialise the shared namespace if app.js has not done so yet.
 window.Coach = window.Coach || {};
@@ -36,7 +38,7 @@ function isLoggedIn() {
   return Boolean(getToken());
 }
 
-// Authorization header attached to protected (submit/progress) requests.
+// Authorization header attached to every authenticated request.
 function authHeaders() {
   const token = getToken();
   return token ? { Authorization: `Bearer ${token}` } : {};
@@ -44,16 +46,21 @@ function authHeaders() {
 
 let currentUserEmail = null;
 
-// ── Auth modal helpers ───────────────────────────────────────────────────────
+// ── Auth gate (inline login/register page) ───────────────────────────────────
 
-function openAuth() {
-  document.getElementById("auth-modal").classList.remove("hidden");
+// Show the auth gate as the page content and hide every content section. This
+// is the ONLY thing a logged-out visitor sees, on every route.
+function showAuthGate() {
+  document.getElementById("auth-gate").classList.remove("hidden");
+  document.getElementById("lesson-list-section").classList.add("hidden");
+  document.getElementById("lesson-section").classList.add("hidden");
+  document.getElementById("exercise-section").classList.add("hidden");
   showLoginForm();
+  renderAuthChrome();
 }
 
-function closeAuth() {
-  document.getElementById("auth-modal").classList.add("hidden");
-  clearAuthErrors();
+function hideAuthGate() {
+  document.getElementById("auth-gate").classList.add("hidden");
 }
 
 function showLoginForm() {
@@ -84,15 +91,13 @@ function showError(id, message) {
   el.classList.remove("hidden");
 }
 
-// Render every auth-related chrome string + the logged-in/out state.
+// Render every auth-related chrome string + the logged-in/out header state.
 function renderAuthChrome() {
-  // t() is provided by app.js via Coach.t(); fall back to a no-op stub during
-  // the brief window between auth.js load and app.js load (should never happen
-  // in practice since scripts are sequential, but guards against future reorder).
+  // t() is provided by app.js via Coach.t(); guard against the brief window
+  // before app.js loads (scripts are sequential, but this is defensive).
   const t = window.Coach.t ? window.Coach.t() : null;
   if (!t) return;
 
-  document.getElementById("open-auth-btn").textContent = t.logIn;
   document.getElementById("logout-btn").textContent = t.logOut;
   document.getElementById("login-heading").textContent = t.loginHeading;
   document.getElementById("register-heading").textContent = t.registerHeading;
@@ -107,9 +112,9 @@ function renderAuthChrome() {
   document.getElementById("register-switch-prompt").textContent = t.haveAccount;
   document.getElementById("show-login").textContent = t.logIn;
   document.getElementById("confirm-pending-heading").textContent = t.checkYourEmail;
+  document.getElementById("confirm-back-to-login").textContent = t.logIn;
 
   const loggedIn = isLoggedIn();
-  document.getElementById("open-auth-btn").classList.toggle("hidden", loggedIn);
   document.getElementById("auth-user").classList.toggle("hidden", !loggedIn);
   if (loggedIn && currentUserEmail) {
     document.getElementById("auth-email").textContent = currentUserEmail;
@@ -141,8 +146,10 @@ async function doLogin(email, password) {
   const data = await res.json();
   setToken(data.access_token);
   await loadCurrentUser();
-  closeAuth();
-  refreshAuthDependentUI();
+  hideAuthGate();
+  renderAuthChrome();
+  // app.js owns post-login routing (originally-requested lesson, else /lessons).
+  if (window.Coach.onAuthenticated) await window.Coach.onAuthenticated();
 }
 
 async function doRegister(email, password) {
@@ -176,26 +183,20 @@ async function loadCurrentUser() {
   currentUserEmail = data.email;
 }
 
+// Drop the token and bounce the user back to the auth gate. app.js may override
+// the post-logout destination via Coach.onLoggedOut (defaults to showing gate).
 function logout() {
   clearToken();
   currentUserEmail = null;
-  refreshAuthDependentUI();
-}
-
-// Re-render UI that depends on auth state (badge, check gate, chrome, progress).
-// Calls back into app.js via the Coach namespace for lesson-view-specific concerns.
-function refreshAuthDependentUI() {
   renderAuthChrome();
-  const lessonSlug = window.Coach.lessonSlug;
-  if (lessonSlug) {
-    if (window.Coach.renderCheckGate) window.Coach.renderCheckGate();
-    if (window.Coach.refreshProgress) window.Coach.refreshProgress();
+  if (window.Coach.onLoggedOut) {
+    window.Coach.onLoggedOut();
+  } else {
+    showAuthGate();
   }
 }
 
 function wireAuthUI() {
-  document.getElementById("open-auth-btn").addEventListener("click", openAuth);
-  document.getElementById("auth-close-btn").addEventListener("click", closeAuth);
   document.getElementById("logout-btn").addEventListener("click", logout);
   document.getElementById("show-register").addEventListener("click", (e) => {
     e.preventDefault();
@@ -205,10 +206,9 @@ function wireAuthUI() {
     e.preventDefault();
     showLoginForm();
   });
-  const loginPrompt = document.getElementById("login-prompt");
-  if (loginPrompt) loginPrompt.addEventListener("click", (e) => {
+  document.getElementById("confirm-back-to-login").addEventListener("click", (e) => {
     e.preventDefault();
-    openAuth();
+    showLoginForm();
   });
   document.getElementById("login-form").addEventListener("submit", (e) => {
     e.preventDefault();
@@ -234,8 +234,8 @@ wireAuthUI();
 
 window.Coach.isLoggedIn = isLoggedIn;
 window.Coach.authHeaders = authHeaders;
-window.Coach.openAuth = openAuth;
 window.Coach.logout = logout;
+window.Coach.showAuthGate = showAuthGate;
+window.Coach.hideAuthGate = hideAuthGate;
 window.Coach.renderAuthChrome = renderAuthChrome;
-window.Coach.refreshAuthDependentUI = refreshAuthDependentUI;
 window.Coach.loadCurrentUser = loadCurrentUser;

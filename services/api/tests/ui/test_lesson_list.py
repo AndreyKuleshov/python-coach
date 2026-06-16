@@ -1,14 +1,18 @@
-"""UI scenarios for the curriculum lesson-list page.
+"""UI scenarios for the curriculum lesson-list page (authenticated /lessons view).
 
-Verifies: list renders at /, EN/RU switching retitles items instantly, clicking
-an item opens the lesson view, and the back link returns to the list.
-Screenshots are saved next to this file for the verification report.
+The list is gated behind login, so each test seeds a bearer token into
+localStorage before navigating (init script runs pre-navigation). Verifies: the
+list renders at /lessons, EN/RU switching retitles items instantly, clicking an
+item opens the lesson view, and the back link returns to the list. Screenshots
+are saved next to this file for the verification report.
 """
 
 from pathlib import Path
 
 import pytest
 from playwright.sync_api import Page, expect
+
+from fixtures import SeededUser
 
 pytestmark = [pytest.mark.ui]
 
@@ -21,9 +25,17 @@ _BASICS_EN = "Decorators: the basics"
 _BASICS_RU = "Декораторы: основы"
 
 
-def test_list_shows_published_lessons(page: Page, live_server: str) -> None:
+def _login(page: Page, token: str) -> None:
+    """Seed the bearer token so the authenticated views are reachable."""
+    page.add_init_script(f"window.localStorage.setItem('python-coach.token', '{token}');")
+
+
+def test_list_shows_published_lessons(
+    page: Page, live_server: str, seeded_user: SeededUser
+) -> None:
     """The list view renders published lessons; the placeholder is absent."""
-    page.goto(live_server + "/")
+    _login(page, seeded_user.token)
+    page.goto(live_server + "/lessons")
     # Wait for at least one list item to appear (JS fetch may take a moment).
     page.wait_for_selector("[data-testid='lesson-list-item']")
 
@@ -49,9 +61,12 @@ def test_list_shows_published_lessons(page: Page, live_server: str) -> None:
     page.screenshot(path=str(_SCREENSHOT_DIR / "screenshot_list_en.png"))
 
 
-def test_list_locale_switch_updates_titles(page: Page, live_server: str) -> None:
+def test_list_locale_switch_updates_titles(
+    page: Page, live_server: str, seeded_user: SeededUser
+) -> None:
     """Switching to RU instantly re-renders the list heading and item titles."""
-    page.goto(live_server + "/")
+    _login(page, seeded_user.token)
+    page.goto(live_server + "/lessons")
     page.wait_for_selector("[data-testid='lesson-list-item']")
 
     # Switch to Russian.
@@ -73,9 +88,10 @@ def test_list_locale_switch_updates_titles(page: Page, live_server: str) -> None
     page.screenshot(path=str(_SCREENSHOT_DIR / "screenshot_list_en_back.png"))
 
 
-def test_list_item_slug_attribute(page: Page, live_server: str) -> None:
+def test_list_item_slug_attribute(page: Page, live_server: str, seeded_user: SeededUser) -> None:
     """Each list item exposes its slug via data-slug for QA tooling."""
-    page.goto(live_server + "/")
+    _login(page, seeded_user.token)
+    page.goto(live_server + "/lessons")
     page.wait_for_selector("[data-testid='lesson-list-item']")
 
     items = page.get_by_test_id("lesson-list-item").all()
@@ -84,9 +100,12 @@ def test_list_item_slug_attribute(page: Page, live_server: str) -> None:
         assert slug, f"data-slug missing on list item: {item.inner_html()}"
 
 
-def test_clicking_list_item_opens_lesson(page: Page, live_server: str) -> None:
+def test_clicking_list_item_opens_lesson(
+    page: Page, live_server: str, seeded_user: SeededUser
+) -> None:
     """Clicking a lesson list item navigates to the lesson view."""
-    page.goto(live_server + "/")
+    _login(page, seeded_user.token)
+    page.goto(live_server + "/lessons")
     page.wait_for_selector("[data-testid='lesson-list-item']")
 
     # Click the first item's link.
@@ -100,8 +119,9 @@ def test_clicking_list_item_opens_lesson(page: Page, live_server: str) -> None:
     page.screenshot(path=str(_SCREENSHOT_DIR / "screenshot_lesson_view.png"))
 
 
-def test_back_link_returns_to_list(page: Page, live_server: str) -> None:
+def test_back_link_returns_to_list(page: Page, live_server: str, seeded_user: SeededUser) -> None:
     """The '← Back to lessons' link in the lesson view returns to the list."""
+    _login(page, seeded_user.token)
     # Navigate directly to one of the real lessons.
     page.goto(f"{live_server}/?lesson=decorators-basics")
     expect(page.get_by_test_id("back-to-lessons")).to_be_visible()

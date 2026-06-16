@@ -50,16 +50,25 @@ class LangSwitch:
 
 
 class ListView:
-    """The curriculum list view (no ?lesson= param): heading, items, switcher."""
+    """The authenticated lessons-list view (/lessons): heading, items, switcher.
 
-    def __init__(self, page: Page, base_url: str) -> None:
+    The list is gated behind login, so the POM seeds a bearer token into
+    localStorage before navigation (init script runs pre-navigation).
+    """
+
+    def __init__(self, page: Page, base_url: str, token: str | None = None) -> None:
         self.page = page
         self._base_url = base_url
+        self._token = token
         self.lang = LangSwitch(page)
 
     def open(self) -> "ListView":
-        """Navigate to / and wait until the JS-rendered list has populated."""
-        self.page.goto(f"{self._base_url}/")
+        """Navigate to /lessons (authenticated) and wait for the list to populate."""
+        if self._token is not None:
+            self.page.add_init_script(
+                f"window.localStorage.setItem('python-coach.token', '{self._token}');"
+            )
+        self.page.goto(f"{self._base_url}/lessons")
         # The list is filled by a fetch; wait on the first item rather than a
         # timeout so the navigation/first-paint race is removed.
         self.first_item.wait_for(state="visible")
@@ -91,16 +100,27 @@ class ListView:
 
 
 class LessonView:
-    """The lesson view (?lesson=<slug>): prose, chrome strings, switcher, editor."""
+    """The lesson view (?lesson=<slug>): prose, chrome strings, switcher, editor.
 
-    def __init__(self, page: Page, base_url: str, lesson_slug: str) -> None:
+    The lesson is gated behind login, so the POM seeds a bearer token into
+    localStorage before navigation (init script runs pre-navigation).
+    """
+
+    def __init__(
+        self, page: Page, base_url: str, lesson_slug: str, token: str | None = None
+    ) -> None:
         self.page = page
         self._base_url = base_url
         self._lesson_slug = lesson_slug
+        self._token = token
         self.lang = LangSwitch(page)
 
     def open(self) -> "LessonView":
-        """Navigate to the lesson by slug and wait until the editor is interactive."""
+        """Navigate to the lesson by slug (authenticated) and wait for the editor."""
+        if self._token is not None:
+            self.page.add_init_script(
+                f"window.localStorage.setItem('python-coach.token', '{self._token}');"
+            )
         self.page.goto(f"{self._base_url}/?lesson={self._lesson_slug}")
         # The CodeMirror widget only mounts after the exercise loads; waiting on
         # the populated title + widget removes the first-interaction race.

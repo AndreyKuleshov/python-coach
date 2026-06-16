@@ -16,16 +16,17 @@ import socket
 import subprocess
 import time
 import uuid
-from collections.abc import Iterator
-from dataclasses import dataclass
+from collections.abc import Coroutine, Iterator
+from concurrent.futures import ThreadPoolExecutor
 
 import httpx
 import pytest
-from playwright.sync_api import Page
+from playwright.sync_api import Browser, BrowserContext, Page
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlmodel import delete, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from fixtures import LocalePageFactory, SeededLesson
 from lesson_page import LessonPage
 from python_coach.settings import get_settings
 from python_coach.storage.models.lesson import (
@@ -35,14 +36,6 @@ from python_coach.storage.models.lesson import (
     Lesson,
     LessonTranslation,
 )
-
-
-@dataclass(frozen=True, slots=True)
-class SeededLesson:
-    """Slug + exercise id of the lesson seeded for the UI flow."""
-
-    slug: str
-    exercise_id: int
 
 
 def _free_port() -> int:
@@ -122,16 +115,29 @@ async def _unseed(slug: str) -> None:
         await engine.dispose()
 
 
+def _run_isolated[T](coro: Coroutine[object, object, T]) -> T:
+    """Run a coroutine on a brand-new loop in a worker thread.
+
+    The UI tests are synchronous, but they share a process with pytest-asyncio
+    whose session-scoped loop may already be running by the time a session
+    fixture seeds the DB. A bare ``asyncio.run`` then raises "cannot be called
+    from a running event loop". Running on a dedicated thread's own loop keeps
+    the seed independent of whatever loop pytest-asyncio has active.
+    """
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(lambda: asyncio.run(coro)).result()
+
+
 @pytest.fixture(scope="session")
 def seeded_lesson() -> Iterator[SeededLesson]:
     """Seed a UI lesson once per session and remove it afterwards."""
     worker = os.environ.get("PYTEST_XDIST_WORKER", "main")
     slug = f"qa-ui-{worker}-{uuid.uuid4().hex[:12]}"
-    exercise_id = asyncio.run(_seed(slug))
+    exercise_id = _run_isolated(_seed(slug))
     try:
         yield SeededLesson(slug=slug, exercise_id=exercise_id)
     finally:
-        asyncio.run(_unseed(slug))
+        _run_isolated(_unseed(slug))
 
 
 @pytest.fixture(scope="session")
@@ -180,3 +186,12 @@ def _wait_until_ready(base_url: str, timeout_s: float = 30.0) -> None:
 def lesson_page(page: Page, live_server: str, seeded_lesson: SeededLesson) -> LessonPage:
     """A LessonPage POM pointed at the seeded lesson on the live server."""
     return LessonPage(page, base_url=live_server, lesson_slug=seeded_lesson.slug)
+
+
+@pytest.fixture
+def locale_page_factory(browser: Browser) -> Iterator[LocalePageFactory]:
+    """Yield a factory for locale-pinned pages; close every context on teardown."""
+    contexts: list[BrowserContext] = []
+    yield LocalePageFactory(browser=browser, _contexts=contexts)
+    for context in contexts:
+        context.close()

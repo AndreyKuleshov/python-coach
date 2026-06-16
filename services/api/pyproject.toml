@@ -65,7 +65,7 @@ select = ["E", "F", "I", "UP", "B", "ASYNC"]
 # Local test-helper modules (conftest, the UI page object) are imported by bare
 # name under pytest's rootdir insertion; tell isort they are first-party so the
 # import blocks order deterministically.
-known-first-party = ["python_coach", "conftest", "lesson_page"]
+known-first-party = ["python_coach", "conftest", "fixtures", "lesson_page", "i18n_page"]
 
 [tool.pyright]
 # Generated Alembic revisions reference sqlmodel.sql.* which the stubs don't expose.

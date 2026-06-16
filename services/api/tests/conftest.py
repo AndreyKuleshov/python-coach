@@ -137,6 +137,50 @@ async def seed_exercise(
         yield seeded
 
 
+@dataclass(frozen=True, slots=True)
+class SeededPair:
+    """Two published lessons with deliberately out-of-order positions.
+
+    `low` has the smaller `position` and so must come first in the list payload
+    even though it is inserted second — that is exactly the ordering assertion.
+    """
+
+    low_slug: str
+    high_slug: str
+
+
+@pytest_asyncio.fixture(loop_scope="session")
+async def seed_ordered_pair(
+    unique_slug: str, session_maker: async_sessionmaker[AsyncSession]
+) -> AsyncIterator[SeededPair]:
+    """Seed two published lessons whose positions are inverted vs insert order.
+
+    Inserting the high-position lesson first and asserting the low-position one
+    leads the list proves the API orders by `position`, not by id/insert order.
+    """
+    high_slug = f"{unique_slug}-pos9"
+    low_slug = f"{unique_slug}-pos1"
+    async with session_maker() as session:
+        # Insert high first so a naive id/insert ordering would put it on top.
+        for slug, position in ((high_slug, 9), (low_slug, 1)):
+            lesson = Lesson(slug=slug, is_published=True, position=position)
+            lesson.translations = [
+                LessonTranslation(lesson_id=0, locale="en", title=f"L{position}", body_md="# x"),
+                LessonTranslation(lesson_id=0, locale="ru", title=f"Л{position}", body_md="# х"),
+            ]
+            session.add(lesson)
+        await session.commit()
+    try:
+        yield SeededPair(low_slug=low_slug, high_slug=high_slug)
+    finally:
+        async with session_maker() as session:
+            for slug in (high_slug, low_slug):
+                lesson = (await session.exec(select(Lesson).where(Lesson.slug == slug))).first()
+                if lesson is not None:
+                    await session.exec(delete(Lesson).where(Lesson.id == lesson.id))  # type: ignore[arg-type, call-overload]
+            await session.commit()
+
+
 def _build_rows(slug: str, tests: list[TestSpec]) -> tuple[Lesson, Exercise, list[ExerciseTest]]:
     """Build the ORM objects for a one-exercise lesson (not yet persisted).
 

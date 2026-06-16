@@ -10,7 +10,7 @@ that test sources — visible *and* hidden — never leak to the frontend: the
 import httpx
 import pytest
 
-from conftest import SeededExercise
+from conftest import SeededExercise, SeededPair
 
 pytestmark = [pytest.mark.db]
 
@@ -51,13 +51,50 @@ async def test_list_items_carry_bilingual_titles(
 async def test_list_never_leaks_body_or_exercises(
     client: httpx.AsyncClient, seed_exercise: SeededExercise
 ) -> None:
-    """The list payload must not expose body_md, exercises, tests, or solution_code."""
+    """The list payload must not expose body_md, exercises, tests, or solution_code.
+
+    Asserted on the raw bytes (not just the parsed keys) so a nested or
+    differently-named leak is still caught: the list contract is slug + title +
+    position and nothing more.
+    """
     res = await client.get("/api/lessons")
 
     assert res.status_code == 200
     raw = res.text
-    for forbidden in ["body_md", "exercises", "solution_code", "starter_code"]:
-        assert forbidden not in raw, f"field '{forbidden}' must not appear in list payload"
+    # Field names that must never appear, plus seeded sentinels for content that
+    # would only be present if the corresponding object leaked into the payload.
+    forbidden = [
+        "body_md",
+        "exercises",
+        "tests",
+        "solution_code",
+        "starter_code",
+        "statement_md",
+        seed_exercise.visible_test_filename,
+        seed_exercise.hidden_test_filename,
+        "SECRET_REFERENCE_SOLUTION",
+        "from solution import",
+    ]
+    for needle in forbidden:
+        assert needle not in raw, f"'{needle}' must not appear in the list payload"
+
+
+@pytest.mark.regression
+async def test_list_is_ordered_by_position(
+    client: httpx.AsyncClient, seed_ordered_pair: SeededPair
+) -> None:
+    """Published lessons come back ordered by `position`, not by insert/id order.
+
+    The fixture inserts the high-position lesson first; the API must still place
+    the low-position lesson ahead of it.
+    """
+    res = await client.get("/api/lessons")
+    assert res.status_code == 200
+
+    slugs = [item["slug"] for item in res.json()]
+    assert seed_ordered_pair.low_slug in slugs
+    assert seed_ordered_pair.high_slug in slugs
+    assert slugs.index(seed_ordered_pair.low_slug) < slugs.index(seed_ordered_pair.high_slug)
 
 
 @pytest.mark.smoke

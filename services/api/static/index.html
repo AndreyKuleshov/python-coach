@@ -36,8 +36,8 @@
       <div class="modal-card">
         <button type="button" id="auth-close-btn" class="modal-close" data-testid="auth-close-btn">×</button>
 
-        <!-- Login form -->
-        <form id="login-form" data-testid="login-form">
+        <!-- Login form: starts hidden; showLoginForm() in auth.js reveals it. -->
+        <form id="login-form" class="hidden" data-testid="login-form">
           <h2 id="login-heading">Log in</h2>
           <label id="login-email-label" for="login-email">Email</label>
           <input type="email" id="login-email" data-testid="login-email" autocomplete="email" />

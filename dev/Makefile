@@ -20,7 +20,7 @@ dev-up:
 	$(MAKE) -C $(REPO_ROOT) sandbox-build
 	@echo "==> [4/5] Seeding placeholder lesson..."
 	$(MAKE) -C $(REPO_ROOT) api-seed
-	@echo "==> [5/5] Starting API (uvicorn on :8000)..."
+	@echo "==> [5/5] Starting API (uvicorn on :$(API_PORT))..."
 	$(MAKE) -C $(REPO_ROOT) api-run
 
 # dev-down — tear down the compose stack (data volume is preserved).

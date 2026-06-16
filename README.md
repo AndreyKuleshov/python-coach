@@ -109,9 +109,11 @@ make dev           # everything else: Postgres → migrate → sandbox image →
 2. **Alembic migrations** (`alembic upgrade head`).
 3. **Sandbox Docker image** build.
 4. **Seed** the placeholder lesson (upsert-by-slug — safe to re-run).
-5. **uvicorn** on `:8000` — foreground, keeping the terminal live.
+5. **uvicorn** on `:8077` — foreground, keeping the terminal live. (Non-standard
+   port to avoid clashing with other local projects; override with
+   `make api-run API_PORT=xxxx`.)
 
-Then open `http://127.0.0.1:8000/?lesson=placeholder-intro`, write code, click
+Then open `http://127.0.0.1:8077/?lesson=placeholder-intro`, write code, click
 **Check**.
 
 To stop: `Ctrl-C` (kills uvicorn), then `make dev-down` to tear down Postgres.
@@ -123,7 +125,7 @@ make deploy-up        # start Postgres only
 make api-migrate      # alembic upgrade head
 make sandbox-build    # build the sandbox Docker image
 make api-seed         # load the THROWAWAY placeholder lesson
-make api-run          # uvicorn on :8000
+make api-run          # uvicorn on :8077 (override: API_PORT=xxxx)
 make deploy-down      # stop Postgres
 ```
 

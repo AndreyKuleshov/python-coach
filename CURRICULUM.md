@@ -51,21 +51,21 @@ lesson's `position` (the integer in the **Pos** column).
 | 11 | Comprehensions & unpacking patterns | `comprehensions` | Y, R | **done** | Concise assertions and test-data shaping. |
 | 12 | Dataclasses & `__eq__`/`__repr__` | `dataclasses` | R | **done** | Value objects make `assert a == b` failures readable. |
 | 13 | Type hints & `typing` for tests | `type-hints` | R | **done** | Typed fixtures/factories catch wiring bugs before runtime. |
-| 14 | Exceptions, custom exception types, `raise ... from` | `exceptions` | Y, R | planned | Asserting on error type/message; negative testing. |
+| 14 | Exceptions, custom exception types, `raise ... from` | `exceptions` | Y, R | **done** | Asserting on error type/message; negative testing. |
 
 ## Track 5 — Objects & protocols (advanced)
 
 | Pos | Topic | Lesson slug | Source | Status | AQA connection |
 |----:|-------|-------------|--------|--------|----------------|
-| 15 | Dunder methods & the data model | `dunder-methods` | R | planned | Custom matchers/comparators for domain objects under test. |
-| 16 | Properties & descriptors | `descriptors` | R | planned | Understanding framework magic (e.g. how fixtures attach). |
-| 17 | `__slots__`, metaclasses (awareness, not abuse) | `metaclasses` | Y, R | planned | How test frameworks auto-register classes/plugins. |
+| 15 | Dunder methods & the data model | `dunder-methods` | R | **done** | Custom matchers/comparators for domain objects under test. |
+| 16 | Properties & descriptors | `descriptors` | R | **done** | Understanding framework magic (e.g. how fixtures attach). |
+| 17 | `__slots__`, metaclasses (awareness, not abuse) | `metaclasses` | Y, R | **done** | How test frameworks auto-register classes/plugins. |
 
 ## Track 6 — Concurrency & I/O (modern AQA)
 
 | Pos | Topic | Lesson slug | Source | Status | AQA connection |
 |----:|-------|-------------|--------|--------|----------------|
-| 18 | `async`/`await` basics | `async-basics` | R | planned | Testing async code; `pytest-asyncio` mental model. |
+| 18 | `async`/`await` basics | `async-basics` | R | **done** | Testing async code; `pytest-asyncio` mental model. |
 | 19 | Mocking & test doubles (stdlib `unittest.mock`) | `mocking` | O | planned | Isolating units; patching network/time for determinism. |
 
 ## Track 7 — pytest mastery (capstone, AQA-specific)
@@ -85,10 +85,6 @@ lesson's `position` (the integer in the **Pos** column).
 
 ## Progress
 
-Done (13): pos 1–13 — `functions-first-class`, `args-kwargs`,
-`decorators-basics`, `decorators-advanced`, `functools-toolkit`,
-`iterators-protocol`, `generators`, `itertools`, `context-managers`,
-`contextlib`, `comprehensions`, `dataclasses`, `type-hints`.
-
-Next: pos 14 `exceptions`, then Track 5 (15–17 objects/protocols),
-Track 6 (18–19 concurrency/mocking), Track 7 (20–23 pytest capstone).
+Done (18): pos 1–18. Remaining: pos 19 `mocking`, then Track 7 capstone —
+pos 20 `pytest-fixtures`, 21 `pytest-parametrize`, 22 `pytest-marks-plugins`,
+23 `pytest-assertions`.

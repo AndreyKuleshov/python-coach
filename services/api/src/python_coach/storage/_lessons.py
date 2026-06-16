@@ -8,6 +8,7 @@ borrows the other one's prose) is a read-side concern and lives here.
 
 from dataclasses import dataclass
 
+from sqlalchemy import func
 from sqlalchemy.orm import selectinload
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -18,6 +19,20 @@ from python_coach.storage.models.lesson import (
     ExerciseTest,
     Lesson,
 )
+from python_coach.storage.models.submission import Progress
+
+
+@dataclass(frozen=True, slots=True)
+class LessonExerciseCounts:
+    """Per-lesson exercise tally for one user: total vs solved.
+
+    Used to derive lesson completion (solved == total and total > 0) and the
+    profile/list aggregates without an N+1 walk over exercises.
+    """
+
+    lesson_id: int
+    total_exercises: int
+    solved_exercises: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -107,3 +122,37 @@ class LessonsMixin:
         )
         result = await self.session.exec(stmt)
         return list(result.all())
+
+    async def exercise_counts_by_lesson(self, user_id: int) -> dict[int, LessonExerciseCounts]:
+        """Total + solved exercise counts per lesson for one user, in two queries.
+
+        Avoids an N+1 walk: one aggregate counts all exercises per lesson, a
+        second counts the user's solved progress rows per lesson. The solved
+        count is scoped to `user_id`, so no other user's progress leaks in.
+        Lessons with zero exercises are absent from the totals map (and so are
+        never "completed").
+        """
+        # All exercises grouped by lesson (user-independent). count() with no
+        # column counts rows, sidestepping the `id: int | None` column typing.
+        totals_stmt = select(Exercise.lesson_id, func.count()).group_by(
+            Exercise.lesson_id  # type: ignore[arg-type]
+        )
+        totals = {row[0]: row[1] for row in (await self.session.exec(totals_stmt)).all()}
+
+        # Solved exercises for THIS user, grouped by the exercise's lesson.
+        solved_stmt = (
+            select(Exercise.lesson_id, func.count())
+            .join(Progress, Progress.exercise_id == Exercise.id)  # type: ignore[arg-type]
+            .where(Progress.user_id == user_id, Progress.is_solved.is_(True))  # type: ignore[union-attr]
+            .group_by(Exercise.lesson_id)  # type: ignore[arg-type]
+        )
+        solved = {row[0]: row[1] for row in (await self.session.exec(solved_stmt)).all()}
+
+        return {
+            lesson_id: LessonExerciseCounts(
+                lesson_id=lesson_id,
+                total_exercises=total,
+                solved_exercises=solved.get(lesson_id, 0),
+            )
+            for lesson_id, total in totals.items()
+        }

@@ -1,8 +1,9 @@
 """API tests for the auth flow: register -> confirm -> login -> me.
 
-Drives the real app + DB via ASGITransport. SMTP is unset in the test env so
-the confirmation link is logged, not sent; we confirm by minting/reading the
-same signed token the app uses (no token table), then assert login behaviour.
+Drives the real app + DB via ASGITransport. The ``_FakeEmailClient`` override
+(registered in conftest ``session_maker``) intercepts every confirmation send so
+no real SMTP call is made; we confirm by minting the same signed token the app
+uses (no token table), then assert login behaviour.
 """
 
 import uuid
@@ -13,9 +14,13 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 from sqlmodel import delete, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from conftest import _FakeEmailClient
+from python_coach.app import app
+from python_coach.clients.email import EmailClient
 from python_coach.controllers.security import mint_confirm_token
 from python_coach.settings import get_settings
 from python_coach.storage.models.user import User
+from python_coach.transport.deps import get_email_client
 
 pytestmark = [pytest.mark.db]
 
@@ -152,3 +157,44 @@ async def test_me_without_token_is_401(client: httpx.AsyncClient) -> None:
     """GET /api/auth/me without a bearer token is 401."""
     res = await client.get("/api/auth/me")
     assert res.status_code == 401
+
+
+@pytest.mark.smoke
+async def test_register_uses_fake_email_client_not_smtp(
+    client: httpx.AsyncClient,
+    session_maker: async_sessionmaker[AsyncSession],
+    fake_email_client: _FakeEmailClient,
+) -> None:
+    """Registration sends via the fake, never through a real SMTP server.
+
+    This is the canonical safety regression: it asserts that the DI override is
+    in place and that the injected dependency is our in-memory double, not the
+    production ``EmailClient``. If this test fails it means the override was
+    removed or the wiring changed — stop and restore it before merging.
+    """
+    email = _unique_email()
+    calls_before = len(fake_email_client.sent)
+    try:
+        res = await client.post("/api/auth/register", json={"email": email, "password": _PASSWORD})
+        assert res.status_code == 201, res.text
+
+        # The fake must have recorded exactly one new call for this registration.
+        new_calls = fake_email_client.sent[calls_before:]
+        assert len(new_calls) == 1, f"expected 1 fake send, got {len(new_calls)}"
+        to_addr, confirm_url = new_calls[0]
+        assert to_addr == email
+        assert confirm_url  # the app generated a real signed URL
+
+        # The DI override must resolve to our fake, not the real EmailClient.
+        resolved = app.dependency_overrides.get(get_email_client)
+        assert resolved is not None, "get_email_client override is not registered"
+        injected = resolved()
+        assert isinstance(injected, _FakeEmailClient), (
+            f"expected _FakeEmailClient in DI, got {type(injected).__name__} — "
+            "real SMTP would have been used"
+        )
+        assert not isinstance(injected, EmailClient), (
+            "override resolved to the real EmailClient — SMTP would fire in tests"
+        )
+    finally:
+        await _delete_user(session_maker, email)

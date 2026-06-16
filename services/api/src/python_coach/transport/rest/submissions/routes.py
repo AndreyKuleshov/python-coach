@@ -3,6 +3,7 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from python_coach.controllers.lessons import LessonLockedError
 from python_coach.controllers.submissions import (
     ExerciseNotFoundError,
     get_submission,
@@ -81,6 +82,8 @@ async def create_submission(
         outcome = await submit_solution(user.id or 0, body.exercise_id, body.code, storage, sandbox)
     except ExerciseNotFoundError as exc:
         raise HTTPException(status_code=404, detail="exercise not found") from exc
+    except LessonLockedError as exc:
+        raise HTTPException(status_code=403, detail="lesson is locked") from exc
 
     await storage.session.commit()
     return _to_dto(outcome.submission)

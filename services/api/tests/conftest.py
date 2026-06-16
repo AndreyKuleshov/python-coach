@@ -13,12 +13,16 @@ pytest-asyncio's per-test loops closes its pooled asyncpg connections mid-run
 session loop and point the app's ``get_session`` dependency at it — no product
 code changes, just dependency-injection wiring that FastAPI exposes for exactly
 this purpose.
+
+SMTP guarantee: ``_FakeEmailClient`` is registered via ``app.dependency_overrides``
+in ``session_maker`` so every in-process call to ``/api/auth/register`` hits the
+fake, never a real SMTP server — regardless of what ``.env`` contains.
 """
 
 import os
 import uuid
 from collections.abc import AsyncIterator
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import httpx
 import pytest
@@ -39,6 +43,30 @@ from python_coach.storage.models.lesson import (
     LessonTranslation,
 )
 from python_coach.storage.models.user import User
+from python_coach.transport.deps import get_email_client
+
+
+@dataclass
+class _FakeEmailClient:
+    """In-memory email double — records calls, never touches SMTP.
+
+    Registered via ``app.dependency_overrides`` so every in-process register
+    route call lands here instead of the real ``EmailClient``. Tests can inspect
+    ``sent`` to assert that confirmation links were generated without relying on
+    log scraping or SMTP side-effects.
+    """
+
+    sent: list[tuple[str, str]] = field(default_factory=list)
+
+    async def send_confirmation(self, to_email: str, confirm_url: str) -> None:
+        """Record the outbound confirmation without touching any SMTP server."""
+        self.sent.append((to_email, confirm_url))
+
+
+# Session-scoped fake so every test in the suite shares the same instance and
+# the override stays registered for the full run.
+_fake_email_client = _FakeEmailClient()
+
 
 # Sentinel reference solution seeded on every exercise so the leak tests can
 # assert it never reaches the lesson API.
@@ -82,11 +110,17 @@ async def session_maker() -> AsyncIterator[async_sessionmaker[AsyncSession]]:
         async with maker() as session:
             yield session
 
+    # Both overrides live together so they are always installed and removed as a
+    # pair — the session override is the entry point for all DB-touching tests,
+    # so piggybacking the email override here guarantees it is active whenever
+    # any test can reach the register endpoint.
     app.dependency_overrides[get_session] = _override_get_session
+    app.dependency_overrides[get_email_client] = lambda: _fake_email_client
     try:
         yield maker
     finally:
         app.dependency_overrides.pop(get_session, None)
+        app.dependency_overrides.pop(get_email_client, None)
         await engine.dispose()
 
 
@@ -98,16 +132,26 @@ async def client() -> AsyncIterator[httpx.AsyncClient]:
         yield ac
 
 
+@dataclass(frozen=True, slots=True)
+class AuthAccount:
+    """A confirmed test account: its email plus a live bearer token."""
+
+    email: str
+    token: str
+
+
 @pytest_asyncio.fixture(loop_scope="session")
-async def auth_token(
+async def auth_account(
     client: httpx.AsyncClient, session_maker: async_sessionmaker[AsyncSession]
-) -> AsyncIterator[str]:
+) -> AsyncIterator[AuthAccount]:
     """Register a unique user, confirm them directly in the DB, and log in.
 
-    SMTP is unset in tests so the confirmation link is only logged; rather than
-    scrape logs we flip is_email_confirmed straight in the DB (the migration's
-    own fast path), then log in through the real endpoint to obtain a JWT. The
-    user is deleted afterwards so the suite stays order-independent under xdist.
+    The email override (``_FakeEmailClient``) absorbs the confirmation send so
+    no real SMTP call is made. We flip ``is_email_confirmed`` straight in the DB
+    (the migration's own fast path) rather than following the link, then log in
+    through the real endpoint to obtain a JWT. The user is deleted afterwards so
+    the suite stays order-independent under xdist. Exposes the email too so
+    progression tests can seed solved Progress for it.
     """
     worker = os.environ.get("PYTEST_XDIST_WORKER", "main")
     email = f"qa-{worker}-{uuid.uuid4().hex[:12]}@example.com"
@@ -129,13 +173,25 @@ async def auth_token(
     token = login.json()["access_token"]
 
     try:
-        yield token
+        yield AuthAccount(email=email, token=token)
     finally:
         async with session_maker() as session:
             user = (await session.exec(select(User).where(User.email == email))).first()
             if user is not None:
                 await session.exec(delete(User).where(User.id == user.id))  # type: ignore[arg-type, call-overload]
                 await session.commit()
+
+
+@pytest_asyncio.fixture(loop_scope="session")
+async def auth_token(auth_account: AuthAccount) -> str:
+    """The bearer token for the shared confirmed test account."""
+    return auth_account.token
+
+
+@pytest_asyncio.fixture(loop_scope="session")
+async def auth_email(auth_account: AuthAccount) -> str:
+    """The email of the shared confirmed test account (for seeding its progress)."""
+    return auth_account.email
 
 
 @pytest_asyncio.fixture(loop_scope="session")
@@ -189,6 +245,12 @@ async def second_auth_client(
             if user is not None:
                 await session.exec(delete(User).where(User.id == user.id))  # type: ignore[arg-type, call-overload]
                 await session.commit()
+
+
+@pytest.fixture(scope="session")
+def fake_email_client() -> _FakeEmailClient:
+    """Expose the session-scoped email fake so tests can assert on captured calls."""
+    return _fake_email_client
 
 
 @pytest.fixture

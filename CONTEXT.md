@@ -36,10 +36,13 @@ are shown and stored.
   a confirmed one receives a **JWT bearer access token** (HS256, `JWT_SECRET`,
   with an expiry).
 - **Protected (everything content-related):** the lesson endpoints
-  (`GET /api/lessons`, `GET /api/lessons/{slug}`), `POST /api/submissions`, and
-  the progress endpoints all require the bearer token; lesson reads validate the
-  token but are not keyed to the user, while submissions/progress are keyed to
-  the current user. A request without/with an invalid token → **401**.
+  (`GET /api/lessons`, `GET /api/lessons/{slug}`), `POST /api/submissions`, the
+  progress endpoints, and `GET /api/profile` all require the bearer token. Lesson
+  reads are now **keyed to the user** too: they derive completion/unlock per
+  account and a **locked** lesson is refused with **403** (the list still lists
+  every published lesson with its `is_completed`/`is_unlocked` flags so the UI
+  can render locked rows). Submissions/progress/profile are keyed to the current
+  user. A request without/with an invalid token → **401**.
 - **Public (the only unauthenticated endpoints):** the auth routes —
   `POST /api/auth/register`, `GET /api/auth/confirm`, `POST /api/auth/login`
   (`GET /api/auth/me` resolves the current user from the token).
@@ -57,6 +60,35 @@ are shown and stored.
   form, not the content; the requested path is stashed so a successful login
   returns the user to it (else to `/lessons`). **After logout** — or if any
   authenticated fetch returns 401 — the UI drops back to the auth form.
+
+## Product requirement: progression (completion + sequential unlock + profile)
+
+Learning is a guided sequence, not a free-for-all. Three product facts, all
+enforced **server-side** (the API is the real gate; the frontend mirrors it):
+
+- **Lesson completion** is *derived*, not stored: a lesson is **completed** by a
+  user when it has at least one exercise **and** every exercise in it has a
+  solved per-(user, exercise) `Progress` row. There is no redundant
+  `is_completed` column — it is computed from existing progress.
+- **Sequential unlock** over PUBLISHED lessons ordered by `position`: a lesson is
+  **unlocked** iff it is the first published lesson **or** the immediately
+  preceding published lesson is completed by the user. A **locked** lesson is not
+  accessible — `GET /api/lessons/{slug}` returns **403** and a submission to one
+  of its exercises returns **403** (you cannot progress a locked lesson).
+- **Next lesson** = the next published lesson by `position`. The lesson read
+  exposes `next_slug` (null on the last lesson) so the UI can offer a "Next
+  lesson →" button once the current lesson is completed.
+- **Personal profile / cabinet** (`GET /api/profile`, route `/profile`): the
+  user's email + an ordered list of all published lessons each with
+  solved/total exercise counts and `is_completed` / `is_unlocked`, plus totals
+  (`lessons_completed` / `lessons_total`). Scoped to the bearer-token user — no
+  cross-user data.
+
+Completion + unlock are computed efficiently: two aggregate queries
+(`exercise_counts_by_lesson`) yield total and solved-per-lesson counts in one
+pass, and a single fold over the position-ordered published lessons derives both
+flags (no N+1). The list (`GET /api/lessons`), the single-lesson read, the
+submission gate, and the profile all reuse this one fold.
 
 ## Target skill: AQA
 

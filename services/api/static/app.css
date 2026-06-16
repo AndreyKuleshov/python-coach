@@ -120,3 +120,36 @@ button:disabled { opacity: 0.6; cursor: wait; }
 .form-switch a { color: #0969da; text-decoration: none; }
 .form-switch a:hover { text-decoration: underline; }
 #confirm-pending p { font-size: 14px; line-height: 1.5; color: #1f2328; }
+
+/* Lesson-list progression states. */
+.lesson-list li { display: flex; align-items: center; gap: 8px; padding-right: 4px; }
+.lesson-list li.lesson-current a { font-weight: 700; }
+.lesson-list li.lesson-current { background: #ddf4ff; border-radius: 6px; }
+.lesson-list li.lesson-locked { color: #8c959f; }
+.lesson-locked-title { display: block; padding: 12px 4px; cursor: not-allowed; }
+.lock-indicator { font-size: 13px; color: #8c959f; }
+.completed-badge { color: var(--pass); font-size: 13px; font-weight: 600; }
+.current-badge { color: #0969da; font-size: 13px; font-weight: 600; }
+.locked-hint { color: var(--fail); font-size: 13px; margin: 0 0 12px; }
+.locked-hint.hidden { display: none; }
+
+/* Lesson-completed CTA. */
+.completion { margin-top: 20px; padding: 16px; border: 1px solid var(--pass); border-radius: 6px; background: #eafaef; }
+.completion.hidden { display: none; }
+.completion-text { color: var(--pass); font-weight: 700; margin: 0 0 12px; }
+#all-complete-msg { font-weight: 700; margin: 0; }
+
+/* Profile / cabinet. */
+.auth-email-link { color: #1f2328; font-weight: 600; text-decoration: none; }
+.auth-email-link:hover { text-decoration: underline; }
+.profile-identity { font-size: 14px; color: #57606a; margin: 0 0 8px; }
+.profile-summary { font-size: 16px; font-weight: 600; margin: 0 0 8px; }
+.progress-track { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; height: 14px; overflow: hidden; margin-bottom: 20px; }
+.progress-bar { background: var(--pass); height: 100%; width: 0; transition: width 0.3s; }
+.profile-lessons { list-style: none; padding: 0; margin: 0; }
+.profile-lessons li { display: flex; align-items: center; gap: 12px; padding: 10px 4px; border-bottom: 1px solid var(--border); }
+.profile-lesson-title { flex: 1; }
+.profile-lessons li.lesson-completed .profile-lesson-status { color: var(--pass); font-weight: 600; }
+.profile-lessons li.lesson-locked { color: #8c959f; }
+.profile-lessons li.lesson-current { font-weight: 700; }
+.profile-lesson-counts { font-size: 13px; color: #57606a; }

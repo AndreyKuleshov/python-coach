@@ -13,6 +13,7 @@ from fastapi.staticfiles import StaticFiles
 
 from python_coach.transport.rest.auth.routes import router as auth_router
 from python_coach.transport.rest.lessons.routes import router as lessons_router
+from python_coach.transport.rest.profile.routes import router as profile_router
 from python_coach.transport.rest.progress.routes import router as progress_router
 from python_coach.transport.rest.submissions.routes import router as submissions_router
 
@@ -40,6 +41,7 @@ def create_app() -> FastAPI:
     app.include_router(lessons_router)
     app.include_router(submissions_router)
     app.include_router(progress_router)
+    app.include_router(profile_router)
 
     @app.get("/healthz", tags=["meta"])
     async def healthz() -> dict[str, str]:
@@ -60,6 +62,11 @@ def create_app() -> FastAPI:
         @app.get("/lessons", include_in_schema=False)
         async def lessons_view() -> FileResponse:
             """Serve the SPA shell for the authenticated lessons-list view."""
+            return FileResponse(index_file)
+
+        @app.get("/profile", include_in_schema=False)
+        async def profile_view() -> FileResponse:
+            """Serve the SPA shell for the authenticated profile/cabinet view."""
             return FileResponse(index_file)
 
         app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")

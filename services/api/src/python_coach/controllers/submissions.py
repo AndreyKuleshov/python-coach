@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 from python_coach.clients.sandbox import SandboxClient, SandboxFile
 from python_coach.clients.sandbox_result import TestRunResult
+from python_coach.controllers.lessons import LessonLockedError, get_lesson_states
 from python_coach.storage.models.submission import Submission, SubmissionStatus
 from python_coach.storage.storage import Storage
 
@@ -27,10 +28,21 @@ async def submit_solution(
     storage: Storage,
     sandbox: SandboxClient,
 ) -> GradeOutcome:
-    """Grade user `code` for an exercise in the sandbox and record per-user progress."""
+    """Grade user `code` for an exercise in the sandbox and record per-user progress.
+
+    Rejects submissions to a locked lesson (LessonLockedError -> 403): you cannot
+    progress a lesson you have not unlocked. The lock is derived from the same
+    sequential-unlock fold used by the lesson reads.
+    """
     exercise = await storage.get_exercise(exercise_id)
     if exercise is None:
         raise ExerciseNotFoundError(exercise_id)
+
+    # Gate: the exercise's PUBLISHED lesson must be unlocked for this user.
+    states = await get_lesson_states(user_id, storage)
+    lesson_state = next((s for s in states if s.lesson.id == exercise.lesson_id), None)
+    if lesson_state is not None and not lesson_state.is_unlocked:
+        raise LessonLockedError(exercise.lesson_id)
 
     tests = await storage.get_exercise_tests(exercise_id)
 

@@ -18,16 +18,18 @@ services/api/                 FastAPI app (uv workspace member)
     app.py                    ASGI entrypoint, routers, static page, logging
     settings.py               pydantic-settings (env-only, frozen)
     transport/                FastAPI routers + DTOs + deps.py (the wiring point)
-      rest/{auth,lessons,submissions,progress}/routes.py
+      rest/{auth,lessons,submissions,progress,profile}/routes.py
       deps.py                 builds Storage/clients + resolves the current user (JWT)
     controllers/              use-cases; take unpacked primitives; no fastapi import
       auth.py, security.py    register/confirm/login + Argon2 hashing + JWT helpers
+      lessons.py              lesson reads + completion/unlock fold (the gate)
+      profile.py              profile/progress aggregate (reuses the lessons fold)
     storage/                  one Storage class, per-domain mixins, SQLModel tables
       models/{lesson,submission,user}.py
     clients/                  SandboxClient (Docker runner) + EmailClient + result dataclasses
     migrations/               Alembic (config in pyproject, no alembic.ini)
     seed.py                   lesson ingest CLI (the methodist's tool)
-  static/                     single-page lesson UI (CodeMirror + marked, CDN)
+  static/                     single-page UI: i18n.js, auth.js, app.js, profile.js (CDN CodeMirror + marked)
   tests/                      pytest
 services/sandbox/             Docker image that runs ONE submission's pytest
   Dockerfile, runner/run_tests.py, smoke.sh
@@ -68,10 +70,37 @@ Login is **email + password** with **email confirmation required** before login.
 **Protected — everything content-related** (require the bearer token;
 a request without/with an invalid token → **401**):
 `GET /api/lessons`, `GET /api/lessons/{slug}`, `POST /api/submissions`,
-`GET /api/submissions/{id}`, `GET /api/progress/{id}`. Lesson reads validate the
-token; submissions/progress are additionally keyed to the current user.
+`GET /api/submissions/{id}`, `GET /api/progress/{id}`, `GET /api/profile`. Lesson
+reads, submissions, progress, and the profile are all keyed to the current user.
 **Public — the only unauthenticated endpoints:** the auth routes above
 (`register`, `confirm`, `login`; `me` resolves the token).
+
+## Progression: completion, sequential unlock, profile
+
+Learning is a guided sequence enforced **server-side** (the frontend mirrors,
+never replaces, the gate):
+
+- **Completion is derived** (no stored flag): a lesson is completed when it has
+  exercises and the user has a solved `Progress` row for every one of them.
+- **Sequential unlock** over published lessons ordered by `position`: the first
+  is always unlocked; each later one unlocks once the previous published lesson
+  is completed. `GET /api/lessons/{slug}` returns **403** for a locked lesson
+  (no content served) and `POST /api/submissions` returns **403** for an exercise
+  in a locked lesson.
+- `GET /api/lessons` returns each published lesson with `is_completed` /
+  `is_unlocked` (plus slug/title/position). The single-lesson read adds
+  `is_completed` and `next_slug` (the next published lesson by position, or null
+  if last) to drive the "Next lesson →" button.
+- `GET /api/profile` returns the user's email, an ordered list of all published
+  lessons each with `{slug, title, position, total_exercises, solved_exercises,
+  is_completed, is_unlocked}`, and totals (`lessons_completed` /
+  `lessons_total`). Reachable in the UI at `/profile` (the account email in the
+  header links to it).
+
+Frontend routes: `/lessons` (list with completed ✓ / current / locked rows —
+locked rows are not clickable), `/?lesson=<slug>` (lesson view; a locked deep
+link redirects to `/lessons` with a hint, since the API answers 403), and
+`/profile` (progress bar + per-lesson status). All bilingual EN/RU.
 
 The frontend stores the JWT in `localStorage` and attaches it on every content
 call. **No content is reachable while logged out:** the landing `/` shows the
@@ -220,8 +249,11 @@ make deploy-down      # stop Postgres
   schema already has `PENDING` and a `GET /submissions/{id}`).
 - **Hardened sandbox.** gVisor/Kata/seccomp, a dedicated runner host, image with
   extra libs, `conftest.py` support per exercise.
-- **Progress analytics & lesson navigation.** Only per-exercise progress + a
-  single-exercise page exist; no curriculum index, no completion dashboards.
+- **Progress analytics.** Implemented now: per-exercise progress, derived lesson
+  completion, sequential unlock with 403 gating, a curriculum list with
+  completed/current/locked states, a "Next lesson" flow, and a profile/cabinet
+  page with an overall progress bar. Deferred: streaks, time-on-task, per-test
+  history, and richer dashboards.
 - **Allure / Playwright UI tests & httpx API integration tests.** Owned by the
   `qa` agent. Current tests are unit-level only.
 - **Rate limiting / abuse controls** on the submit endpoint.

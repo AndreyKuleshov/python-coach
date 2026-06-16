@@ -20,7 +20,8 @@
              page itself); logged-in shows email + logout. -->
         <span id="auth-status" class="auth-status">
           <span id="auth-user" class="auth-user hidden">
-            <span id="auth-email" data-testid="auth-email"></span>
+            <!-- The account email links to the personal profile/cabinet. -->
+            <a id="auth-email" href="/profile" data-testid="auth-email" class="auth-email-link"></a>
             <button type="button" id="logout-btn" data-testid="logout-btn">Log out</button>
           </span>
         </span>
@@ -81,6 +82,8 @@
       <!-- LIST VIEW: the authenticated lessons list (its own /lessons route). -->
       <section id="lesson-list-section" class="hidden">
         <h2 id="list-heading" data-testid="list-heading">Lessons</h2>
+        <!-- Shown when a locked row is clicked or a locked deep-link redirected here. -->
+        <p id="locked-hint" class="locked-hint hidden" data-testid="locked-hint"></p>
         <ul id="lesson-list" data-testid="lesson-list" class="lesson-list"></ul>
       </section>
 
@@ -108,11 +111,35 @@
           <ul id="results-list" data-testid="results-list"></ul>
           <pre id="results-error" class="error hidden" data-testid="results-error"></pre>
         </div>
+
+        <!-- LESSON COMPLETED state: shown when every exercise is solved. -->
+        <div id="lesson-completion" class="completion hidden" data-testid="lesson-completion">
+          <p id="completion-text" class="completion-text" data-testid="completion-text"></p>
+          <button type="button" id="next-lesson-btn" class="hidden" data-testid="next-lesson-btn"></button>
+          <p id="all-complete-msg" class="hidden" data-testid="all-complete-msg"></p>
+        </div>
+      </section>
+
+      <!-- PROFILE VIEW: personal cabinet (its own /profile route). -->
+      <section id="profile-section" class="hidden" data-testid="profile-section">
+        <a id="profile-back" href="/lessons" data-testid="profile-back" class="back-link">← Back to lessons</a>
+        <h2 id="profile-heading" data-testid="profile-heading">Your progress</h2>
+        <p class="profile-identity"><span id="profile-email" data-testid="profile-email"></span></p>
+        <p id="profile-summary" class="profile-summary" data-testid="profile-summary"></p>
+        <div class="progress-track" data-testid="profile-progress">
+          <div id="profile-progress-bar" class="progress-bar" data-testid="profile-progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100"></div>
+        </div>
+        <ul id="profile-lessons" data-testid="profile-lessons" class="profile-lessons"></ul>
       </section>
     </main>
-    <!-- auth.js must load before app.js: it populates window.Coach with token/auth
-         helpers that app.js reads immediately on execution. -->
+    <!-- Load order matters:
+         i18n.js   — defines window.Coach.UI (read at app.js module top-level).
+         auth.js   — token/auth helpers app.js reads immediately on execution.
+         app.js    — list + lesson views; publishes locale helpers for profile.js.
+         profile.js — profile view; reads app.js's locale helpers + UI catalog. -->
+    <script src="/static/i18n.js"></script>
     <script src="/static/auth.js"></script>
     <script src="/static/app.js"></script>
+    <script src="/static/profile.js"></script>
   </body>
 </html>

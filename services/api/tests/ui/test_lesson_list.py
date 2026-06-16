@@ -122,8 +122,10 @@ def test_clicking_list_item_opens_lesson(
 def test_back_link_returns_to_list(page: Page, live_server: str, seeded_user: SeededUser) -> None:
     """The '← Back to lessons' link in the lesson view returns to the list."""
     _login(page, seeded_user.token)
-    # Navigate directly to one of the real lessons.
-    page.goto(f"{live_server}/?lesson=decorators-basics")
+    # Navigate directly to the first published lesson, which is unlocked for a
+    # fresh user (sequential unlock locks later lessons until earlier ones are
+    # completed).
+    page.goto(f"{live_server}/?lesson=functions-first-class")
     expect(page.get_by_test_id("back-to-lessons")).to_be_visible()
 
     page.get_by_test_id("back-to-lessons").click()

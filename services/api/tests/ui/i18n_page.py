@@ -93,10 +93,13 @@ class ListView:
         return self.items.first
 
     def item_by_slug(self, slug: str) -> Locator:
-        """A list row located by its stable data-slug, not by position."""
-        return self.page.get_by_test_id("lesson-list-item").filter(
-            has=self.page.locator(f"[href*='lesson={slug}']")
-        )
+        """A list row located by its stable data-slug, not by position.
+
+        Uses the row's own data-slug (present on every row, locked or not)
+        rather than the link href — locked rows carry no link, so an href-based
+        filter would miss them.
+        """
+        return self.page.locator(f"[data-testid='lesson-list-item'][data-slug='{slug}']")
 
 
 class LessonView:

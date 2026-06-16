@@ -55,6 +55,8 @@ function showAuthGate() {
   document.getElementById("lesson-list-section").classList.add("hidden");
   document.getElementById("lesson-section").classList.add("hidden");
   document.getElementById("exercise-section").classList.add("hidden");
+  const profile = document.getElementById("profile-section");
+  if (profile) profile.classList.add("hidden");
   showLoginForm();
   renderAuthChrome();
 }

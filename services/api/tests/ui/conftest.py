@@ -196,7 +196,14 @@ def seeded_user() -> Iterator[SeededUser]:
 
 @pytest.fixture(scope="session")
 def live_server() -> Iterator[str]:
-    """Run uvicorn on an ephemeral port for the session; yield its base URL."""
+    """Run uvicorn on an ephemeral port for the session; yield its base URL.
+
+    SMTP is disabled for the subprocess by blanking the SMTP_HOST (and the auth
+    fields) in its environment — this forces ``EmailClient`` onto its log-fallback
+    path even when the developer's ``.env`` has real SMTP credentials configured.
+    The override is process-level so it covers any future test that registers
+    through the live server form without depending on any in-process fake.
+    """
     port = _free_port()
     base_url = f"http://127.0.0.1:{port}"
     api_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
@@ -210,7 +217,10 @@ def live_server() -> Iterator[str]:
         "--port",
         str(port),
     ]
-    proc = subprocess.Popen(cmd, cwd=api_dir)
+    # Inherit the full environment (so DATABASE_URL etc. are present) then blank
+    # out every SMTP field so the subprocess never attempts a real send.
+    env = {**os.environ, "SMTP_HOST": "", "SMTP_USER": "", "SMTP_PASSWORD": ""}
+    proc = subprocess.Popen(cmd, cwd=api_dir, env=env)
     try:
         _wait_until_ready(base_url)
         yield base_url

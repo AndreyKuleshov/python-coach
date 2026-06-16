@@ -46,8 +46,9 @@ async def test_list_items_carry_bilingual_titles(
     assert seeded["title"]["en"] == "QA seeded lesson"
     assert seeded["title"]["ru"] == "QA урок"
     assert "position" in seeded
-    # Verify the shape is exactly {slug, title, position} — no extra fields leak.
-    assert set(seeded.keys()) == {"slug", "title", "position"}
+    # Shape is the safe metadata set + the derived gating flags — nothing else
+    # (no body/exercises/tests/solution_code).
+    assert set(seeded.keys()) == {"slug", "title", "position", "is_completed", "is_unlocked"}
 
 
 @pytest.mark.regression

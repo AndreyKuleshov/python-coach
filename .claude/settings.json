@@ -1,0 +1,10 @@
+{
+  "extraKnownMarketplaces": {
+    "harness": {
+      "source": { "source": "github", "repo": "AndreyKuleshov/harness" }
+    }
+  },
+  "enabledPlugins": {
+    "learning-platform-harness@harness": true
+  }
+}

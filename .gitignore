@@ -4,6 +4,14 @@ sources/
 # Scratch / draft material
 to_think/
 
+# Build harness — provided by the learning-platform-harness plugin and synced into
+# the working tree at session start (see .claude/.harness-managed). Not part of the
+# application: kept out of git history and out of the deploy image.
+.claude/agents/
+.claude/rules/
+.claude/references/
+docs/PLATFORM_BLUEPRINT.md
+
 # Playwright test screenshot artifacts
 services/api/tests/ui/screenshot_*.png
 

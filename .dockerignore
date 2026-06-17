@@ -1,0 +1,30 @@
+# Build harness & dev tooling — must NEVER reach the deployed image.
+# (Refined by the devops agent when it authors the production API Dockerfile.)
+.claude/
+sources/
+docs/
+.git/
+.gitignore
+.dockerignore
+README.md
+CONTEXT.md
+CURRICULUM.md
+STORAGE_CONTRACT.md
+
+# Secrets / env (only the example may ever be present)
+.env
+.env.*
+!.env.example
+
+# Python caches / virtualenv
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/
+**/.ruff_cache/
+**/.grimp_cache/
+**/.mypy_cache/
+.venv/
+
+# Tests are not needed in the runtime image
+services/api/tests/
+services/api/tests/ui/screenshot_*.png

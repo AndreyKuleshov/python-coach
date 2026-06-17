@@ -11,11 +11,17 @@
 #   docker build -f services/api/Dockerfile -t python-coach-api:<tag> .
 #
 # NOTE: this image runs ONLY the API. It spawns the grading sandbox by calling
-# the host `docker` CLI against a mounted /var/run/docker.sock — the sandbox
-# image (python-coach-sandbox) is built on first start by docker-entrypoint.sh
-# from the /app/sandbox build context shipped below. See
-# deploy/COOLIFY_DEPLOY.md for the docker.sock security tradeoff + the
-# run-as-root socket-access note.
+# the `docker` CLI (baked into the runtime stage below — see the docker-cli
+# stage) against a mounted /var/run/docker.sock — the sandbox image
+# (python-coach-sandbox) is built on first start by docker-entrypoint.sh from
+# the /app/sandbox build context shipped below. See deploy/COOLIFY_DEPLOY.md for
+# the docker.sock security tradeoff + the run-as-root socket-access note.
+#
+# The docker CLI *client* is baked in (not bind-mounted from the host) because
+# Coolify v4 drops the `-v` binds from custom_docker_run_options, so the host
+# `/usr/bin/docker` never reaches the container. This image carries ONLY the
+# static client binary (no dockerd/containerd/runc); it talks to the host daemon
+# over the mounted socket. DOCKER_BIN stays `docker` (resolved on PATH).
 
 # === builder ================================================================
 FROM python:3.13.1-slim-bookworm AS builder
@@ -43,6 +49,28 @@ COPY services/api/pyproject.toml services/api/pyproject.toml
 # runtime, not installed, so a source change does not bust the dependency layer.
 RUN uv sync --frozen --no-dev --no-install-project --package python-coach
 
+# === docker-cli =============================================================
+# Pull ONLY the static docker *client* binary from the official static bundle.
+# Pinned version + sha256 so the download is reproducible and verifiable; the
+# extraction toolchain (curl, tar, the tgz) stays in this throwaway stage and
+# never reaches the runtime image.
+FROM debian:bookworm-slim AS docker-cli
+
+ARG DOCKER_VERSION=28.5.2
+ARG DOCKER_SHA256=ea90cfd12e1eeb12aa1c971741adb8bd4ed88e2a574eaac13f5029a1dbc6300d
+
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends ca-certificates curl; \
+    rm -rf /var/lib/apt/lists/*; \
+    curl -fsSL -o /tmp/docker.tgz \
+        "https://download.docker.com/linux/static/stable/x86_64/docker-${DOCKER_VERSION}.tgz"; \
+    echo "${DOCKER_SHA256}  /tmp/docker.tgz" | sha256sum -c -; \
+    # Extract only the client binary, flattening the leading docker/ dir.
+    tar -xzf /tmp/docker.tgz -C /usr/local/bin --strip-components=1 docker/docker; \
+    rm /tmp/docker.tgz; \
+    /usr/local/bin/docker --version
+
 # === runtime ================================================================
 FROM python:3.13.1-slim-bookworm AS runtime
 
@@ -55,6 +83,10 @@ ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONPATH=/app/src
+
+# Static docker *client* binary (no daemon) — the entrypoint + sandbox client
+# drive the host daemon through it via the mounted /var/run/docker.sock.
+COPY --from=docker-cli /usr/local/bin/docker /usr/local/bin/docker
 
 # The locked dependency venv from the builder (no uv, no build toolchain here).
 # Built at /app/.venv in the builder so the copied path matches the shebangs.

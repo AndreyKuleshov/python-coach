@@ -118,6 +118,7 @@ Layering is enforced by import-linter (`make api-contracts`), matching
   `db.py` owns the async session.
 - **`clients/`** — external clients: `sandbox.py` (`SandboxClient`, the Docker
   runner), `email.py` (`EmailClient`, stdlib smtplib via `asyncio.to_thread`),
+  `llm.py` (`LLMClient`, the optional OpenAI integration — async `AsyncOpenAI`),
   `sandbox_result.py` (the `TestResult`/`TestRunResult` dataclasses, *not* DB
   tables — serialized into `Submission.result` JSONB).
 - `app.py` (ASGI entrypoint, routers, static page, SPA catch-all, structlog),
@@ -177,10 +178,24 @@ process. Each submission runs in a throwaway container.
   user's email, an ordered per-lesson status list (solved/total, completed,
   unlocked), and totals. `controllers/profile.py` reuses the lessons fold.
 - **SPA frontend + i18n.** Single-page UI in `services/api/static/`:
-  `index.html`, `app.js`, `auth.js`, `exercise.js`, `profile.js`, `i18n.js`,
-  `app.css`, using CDN CodeMirror 5 + `marked` (no build step). A backend SPA
-  catch-all serves the shell for client-side routes (`/lessons`, `/profile`); the
-  JS gates every view behind the token and stashes deep links for post-login return.
+  `index.html`, `app.js`, `auth.js`, `exercise.js`, `profile.js`, `ai.js`,
+  `i18n.js`, `app.css`, using CDN CodeMirror 5 + `marked` (no build step). A
+  backend SPA catch-all serves the shell for client-side routes
+  (`/lessons`, `/profile`); the JS gates every view behind the token and stashes
+  deep links for post-login return.
+- **Optional AI features (external-integration seam).** Two auth-gated,
+  OpenAI-backed helpers behind `LLMClient` (`clients/llm.py`, async `AsyncOpenAI`):
+  on-the-fly **exercise hints** (approach only, never the solution; obeys the
+  lesson-lock gate; `POST /api/exercises/{id}/hint`) and a floating **lesson-chat**
+  widget that explains a pasted excerpt (`POST /api/chat`). Use-cases live in
+  `controllers/ai.py`, routes in `transport/rest/ai/`, frontend in `static/ai.js`.
+  This is the **second external-integration seam** (alongside the sandbox + email
+  clients): the key is server-side only, and when `OPENAI_API_KEY` is empty the
+  feature gracefully disables (endpoints 503, frontend hides the affordances via an
+  `ai_enabled` flag) exactly like the SMTP log-fallback. Tests never call real
+  OpenAI — the LLM dependency is faked in-process and the UI live-server runs in
+  an offline `OPENAI_FAKE` mode. Rate limiting, streaming, and conversation
+  history are deferred.
 
 ---
 

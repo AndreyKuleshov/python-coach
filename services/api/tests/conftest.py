@@ -21,7 +21,7 @@ fake, never a real SMTP server — regardless of what ``.env`` contains.
 
 import os
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Iterator
 from dataclasses import dataclass, field
 
 import httpx
@@ -43,7 +43,7 @@ from python_coach.storage.models.lesson import (
     LessonTranslation,
 )
 from python_coach.storage.models.user import User
-from python_coach.transport.deps import get_email_client
+from python_coach.transport.deps import get_email_client, get_llm_client
 
 
 @dataclass
@@ -66,6 +66,64 @@ class _FakeEmailClient:
 # Session-scoped fake so every test in the suite shares the same instance and
 # the override stays registered for the full run.
 _fake_email_client = _FakeEmailClient()
+
+
+# Canned text the LLM fake returns — distinct per method so tests can assert
+# which path was exercised without ever reaching the real OpenAI API.
+FAKE_HINT_TEXT = "FAKE_HINT: think about the return value."
+FAKE_CHAT_TEXT = "FAKE_CHAT: this excerpt explains the core idea."
+
+
+@dataclass
+class _FakeLLMClient:
+    """In-memory LLM double — returns canned text, NEVER calls OpenAI.
+
+    Mirrors ``_FakeEmailClient``: registered via ``app.dependency_overrides`` so
+    every in-process hint/chat call lands here. ``enabled`` defaults True so the
+    feature is on; tests that need the disabled (503) path build an instance with
+    ``enabled=False`` and override the dependency locally.
+    """
+
+    enabled: bool = True
+    hint_calls: list[tuple[str, str, str]] = field(default_factory=list)
+    explain_calls: list[tuple[str, str, str]] = field(default_factory=list)
+
+    @property
+    def is_enabled(self) -> bool:
+        """Whether the AI features are offered (matches LLMClient.is_enabled)."""
+        return self.enabled
+
+    async def hint(self, statement: str, starter_code: str, locale: str) -> str:
+        """Record the call and return canned hint text — no network."""
+        self.hint_calls.append((statement, starter_code, locale))
+        return FAKE_HINT_TEXT
+
+    async def explain(self, excerpt: str, question: str, locale: str) -> str:
+        """Record the call and return canned explanation text — no network."""
+        self.explain_calls.append((excerpt, question, locale))
+        return FAKE_CHAT_TEXT
+
+
+# Session-scoped enabled fake, installed globally like the email fake.
+_fake_llm_client = _FakeLLMClient()
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _install_external_client_fakes() -> Iterator[None]:
+    """Force the email + LLM dependencies onto their fakes for the WHOLE session.
+
+    Autouse + session-scoped so it is active for every in-process test, even ones
+    that only use the bare ``client`` fixture (which does not pull in
+    ``session_maker``). This is the hard guarantee that NO test reaches a real
+    SMTP server or the real OpenAI API regardless of what ``.env`` contains.
+    """
+    app.dependency_overrides[get_email_client] = lambda: _fake_email_client
+    app.dependency_overrides[get_llm_client] = lambda: _fake_llm_client
+    try:
+        yield
+    finally:
+        app.dependency_overrides.pop(get_email_client, None)
+        app.dependency_overrides.pop(get_llm_client, None)
 
 
 # Sentinel reference solution seeded on every exercise so the leak tests can
@@ -110,17 +168,16 @@ async def session_maker() -> AsyncIterator[async_sessionmaker[AsyncSession]]:
         async with maker() as session:
             yield session
 
-    # Both overrides live together so they are always installed and removed as a
-    # pair — the session override is the entry point for all DB-touching tests,
-    # so piggybacking the email override here guarantees it is active whenever
-    # any test can reach the register endpoint.
+    # The email + LLM fakes are installed by the session-scoped autouse fixture
+    # `_install_external_client_fakes`; here we only point get_session at the
+    # test engine. (Keeping the external-client fakes in a separate autouse
+    # fixture means even bare-`client` tests, which never pull in session_maker,
+    # are still protected from real SMTP / OpenAI calls.)
     app.dependency_overrides[get_session] = _override_get_session
-    app.dependency_overrides[get_email_client] = lambda: _fake_email_client
     try:
         yield maker
     finally:
         app.dependency_overrides.pop(get_session, None)
-        app.dependency_overrides.pop(get_email_client, None)
         await engine.dispose()
 
 
@@ -251,6 +308,12 @@ async def second_auth_client(
 def fake_email_client() -> _FakeEmailClient:
     """Expose the session-scoped email fake so tests can assert on captured calls."""
     return _fake_email_client
+
+
+@pytest.fixture(scope="session")
+def fake_llm_client() -> _FakeLLMClient:
+    """Expose the session-scoped LLM fake so tests can assert on captured calls."""
+    return _fake_llm_client
 
 
 @pytest.fixture

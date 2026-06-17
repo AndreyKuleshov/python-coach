@@ -9,22 +9,26 @@ value even when the editor has never been painted (it would not catch this
 visual bug). Instead, the test reads the text content of .CodeMirror-code,
 which is only populated once CodeMirror has performed a layout pass and
 actually rendered the lines into the DOM.
+
+Uses the session-scoped ``seeded_lesson`` fixture (position=0, always the
+first in the curriculum and therefore always unlocked for a fresh user)
+rather than a hard-coded fixture lesson slug.  A fixed fixture slug such as
+``functions-first-class`` (position=1) becomes locked when another test's
+session fixture inserts a lesson at position=0 before it, which caused this
+test to receive a 403 and time out waiting for the CodeMirror widget.
 """
 
 import pytest
 from playwright.sync_api import Browser, expect
 
-from fixtures import SeededUser
+from fixtures import SeededLesson, SeededUser
 
 pytestmark = [pytest.mark.ui]
 
-# The published multi-exercise lesson whose first exercise starts with
-# "def apply_to_each(..." — a known token we can assert against.
-_LESSON_SLUG = "functions-first-class"
-
 # Token that must appear in the rendered CodeMirror DOM on load.
-# Taken from the first exercise's starter_code in lesson_functions_first_class.json.
-_STARTER_TOKEN = "apply_to_each"
+# The seeded_lesson fixture seeds starter_code="def answer():\n    return 0\n",
+# so "answer" is a reliable token that exists only after a successful refresh.
+_STARTER_TOKEN = "answer"
 
 
 def _authed_page(browser: Browser, token: str):  # type: ignore[return]
@@ -36,16 +40,22 @@ def _authed_page(browser: Browser, token: str):  # type: ignore[return]
 
 
 def test_starter_code_visible_on_load_without_click(
-    browser: Browser, live_server: str, seeded_user: SeededUser
+    browser: Browser,
+    live_server: str,
+    seeded_lesson: SeededLesson,
+    seeded_user: SeededUser,
 ) -> None:
     """First exercise's starter code is painted in the DOM before any user interaction.
 
     We assert the rendered .CodeMirror-code text — not the internal editor
     value — so the test catches the "empty box until click" visual regression.
+    The seeded_lesson is always position=0 (first in curriculum, always
+    unlocked), so this test is immune to other session fixtures inserting
+    earlier lessons.
     """
     ctx, page = _authed_page(browser, seeded_user.token)
     try:
-        page.goto(f"{live_server}/?lesson={_LESSON_SLUG}")
+        page.goto(f"{live_server}/?lesson={seeded_lesson.slug}")
 
         # Wait until the first CodeMirror widget is visible (editors mounted).
         first_cm = page.locator(".CodeMirror").first

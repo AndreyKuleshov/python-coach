@@ -11,6 +11,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from python_coach.clients.email import EmailClient
+from python_coach.clients.llm import LLMClient
 from python_coach.clients.sandbox import SandboxClient
 from python_coach.controllers.auth import AuthConfig
 from python_coach.controllers.security import InvalidTokenError, read_access_token
@@ -35,6 +36,11 @@ def get_email_client(settings: Annotated[Settings, Depends(get_settings)]) -> Em
     return EmailClient(settings)
 
 
+def get_llm_client(settings: Annotated[Settings, Depends(get_settings)]) -> LLMClient:
+    """Build the OpenAI-backed LLM client (overridable in tests via this dep)."""
+    return LLMClient(settings)
+
+
 def get_auth_config(settings: Annotated[Settings, Depends(get_settings)]) -> AuthConfig:
     """Bundle the JWT/email-confirmation knobs from settings for the auth use-cases."""
     return AuthConfig(
@@ -48,6 +54,7 @@ def get_auth_config(settings: Annotated[Settings, Depends(get_settings)]) -> Aut
 StorageDep = Annotated[Storage, Depends(get_storage)]
 SandboxDep = Annotated[SandboxClient, Depends(get_sandbox)]
 EmailClientDep = Annotated[EmailClient, Depends(get_email_client)]
+LLMClientDep = Annotated[LLMClient, Depends(get_llm_client)]
 AuthConfigDep = Annotated[AuthConfig, Depends(get_auth_config)]
 
 # auto_error=False so a missing header yields our own 401 (not a 403) and the

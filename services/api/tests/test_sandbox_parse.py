@@ -34,6 +34,8 @@ def _client(wall_timeout_seconds: int = 10) -> SandboxClient:
         smtp_password="",
         smtp_from="no-reply@example.com",
         public_base_url="http://test",
+        openai_api_key="",
+        openai_model="gpt-4o-mini",
     )
     return SandboxClient(settings)
 

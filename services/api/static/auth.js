@@ -183,6 +183,8 @@ async function loadCurrentUser() {
   }
   const data = await res.json();
   currentUserEmail = data.email;
+  // Show/hide the AI affordances based on whether the server has an OpenAI key.
+  if (window.Coach.AI) window.Coach.AI.setEnabled(Boolean(data.ai_enabled));
 }
 
 // Drop the token and bounce the user back to the auth gate. app.js may override

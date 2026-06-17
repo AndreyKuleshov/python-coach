@@ -109,6 +109,29 @@ browser (`navigator.language`, fallback English); a manual choice is persisted
 in `localStorage` and wins on later visits. Missing-locale prose falls back to
 the other locale rather than erroring.
 
+## Product requirement: AI assistance (optional, OpenAI-backed)
+
+Two auth-gated helpers, generated on the fly by OpenAI. The key
+(`OPENAI_API_KEY`) lives **only on the server** (`services/api/.env`): the
+browser calls our backend, the backend calls OpenAI, the key is never sent to
+the client.
+
+- **Exercise hints** — each exercise has a Hint button that returns a short hint
+  about the *approach* (explicitly **not** the full solution), in the interface
+  language (en/ru). Only the public statement + starter code are sent to the
+  model; the hidden `solution_code` is never forwarded, so it cannot leak.
+  Hints obey the same lesson-lock gate as submissions (no hints for locked
+  content).
+- **Lesson chat** — a floating widget where the learner pastes a lesson excerpt
+  (+ optional question) for a more detailed explanation in their locale. The
+  assistant is scoped to explaining the pasted material and declines off-topic
+  requests. Excerpt/question lengths are capped to bound token cost.
+
+Default model `gpt-4o-mini` (override via `OPENAI_MODEL`). When the key is empty
+the features are **gracefully disabled**: the endpoints return `503` and the
+frontend hides the hint buttons + chat widget (driven by an `ai_enabled` flag on
+`/api/auth/me`) — the app never crashes, mirroring the SMTP log-fallback.
+
 ## Domain entities
 
 | Entity | Meaning | Key relationships |

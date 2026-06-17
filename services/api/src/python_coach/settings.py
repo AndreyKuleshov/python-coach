@@ -55,6 +55,16 @@ class Settings(BaseSettings):
     # Public base URL the confirmation link points at (e.g. http://localhost:8077).
     public_base_url: str
 
+    # === OpenAI (AI hints + lesson chat, optional) ===
+    # When openai_api_key is empty the AI features are gracefully disabled:
+    # the endpoints return 503 and the frontend hides the hint buttons + chat
+    # widget (mirrors the SMTP fallback). The key lives only here, never reaches
+    # the client. OPENAI_FAKE flips the LLM client into an offline canned-text
+    # mode (no network) so the UI live-server can be tested without real calls.
+    openai_api_key: str
+    openai_model: str
+    openai_fake: bool = False  # test-only seam; safe-off default deliberate (see all-languages.md)
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:

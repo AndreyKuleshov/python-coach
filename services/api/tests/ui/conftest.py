@@ -218,8 +218,18 @@ def live_server() -> Iterator[str]:
         str(port),
     ]
     # Inherit the full environment (so DATABASE_URL etc. are present) then blank
-    # out every SMTP field so the subprocess never attempts a real send.
-    env = {**os.environ, "SMTP_HOST": "", "SMTP_USER": "", "SMTP_PASSWORD": ""}
+    # out every SMTP field so the subprocess never attempts a real send. Likewise
+    # force the LLM client into OFFLINE FAKE mode (OPENAI_FAKE=true) so the AI
+    # hint + chat UI is exercisable deterministically without spending real
+    # tokens — and blank the key so nothing can reach OpenAI even by accident.
+    env = {
+        **os.environ,
+        "SMTP_HOST": "",
+        "SMTP_USER": "",
+        "SMTP_PASSWORD": "",
+        "OPENAI_API_KEY": "",
+        "OPENAI_FAKE": "true",
+    }
     proc = subprocess.Popen(cmd, cwd=api_dir, env=env)
     try:
         _wait_until_ready(base_url)

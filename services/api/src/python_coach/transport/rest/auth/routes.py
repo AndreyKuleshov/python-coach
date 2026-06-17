@@ -27,6 +27,7 @@ from python_coach.transport.deps import (
     AuthConfigDep,
     CurrentUserDep,
     EmailClientDep,
+    LLMClientDep,
     StorageDep,
 )
 
@@ -64,11 +65,16 @@ class TokenResponse(BaseModel):
 
 
 class MeResponse(BaseModel):
-    """The current authenticated user."""
+    """The current authenticated user.
+
+    `ai_enabled` lets the frontend show/hide the hint buttons + chat widget
+    without a separate config fetch — it tracks whether an OpenAI key is set.
+    """
 
     id: int
     email: str
     is_email_confirmed: bool
+    ai_enabled: bool
 
 
 @router.post("/register", response_model=RegisterResponse, status_code=201)
@@ -123,9 +129,14 @@ async def login_route(
 
 
 @router.get("/me", response_model=MeResponse)
-async def me(user: CurrentUserDep) -> MeResponse:
-    """Return the current user resolved from the bearer token."""
-    return MeResponse(id=user.id or 0, email=user.email, is_email_confirmed=user.is_email_confirmed)
+async def me(user: CurrentUserDep, llm: LLMClientDep) -> MeResponse:
+    """Return the current user resolved from the bearer token, plus the AI flag."""
+    return MeResponse(
+        id=user.id or 0,
+        email=user.email,
+        is_email_confirmed=user.is_email_confirmed,
+        ai_enabled=llm.is_enabled,
+    )
 
 
 def _result_page(ok: bool, detail: str) -> str:

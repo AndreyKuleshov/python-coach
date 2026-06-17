@@ -235,6 +235,7 @@ function switchLocale(next) {
   localStorage.setItem(LOCALE_KEY, next);
   window.Coach.renderAuthChrome();
   syncLangChrome();
+  if (window.Coach.AI) window.Coach.AI.relocalize();
   // Re-render whichever view is active.
   if (activeView === "lesson") {
     renderProse();
@@ -320,6 +321,9 @@ async function boot() {
     return;
   }
   window.Coach.renderAuthChrome();
+  // Mount the floating chat widget once; setEnabled (from loadCurrentUser) drives
+  // its visibility based on the server's ai_enabled flag.
+  if (window.Coach.AI) window.Coach.AI.mountChatWidget();
   await renderRequestedView();
 }
 

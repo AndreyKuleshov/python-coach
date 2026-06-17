@@ -179,6 +179,9 @@ window.Coach.Exercise = (function () {
 
     block.appendChild(controls);
 
+    // AI hint button (hidden by ai.js when no OpenAI key is configured).
+    if (window.Coach.AI) window.Coach.AI.attachHintButton(block, ex.id);
+
     // Results panel (hidden until first check)
     const results = _buildResultsPanel();
     block.appendChild(results);

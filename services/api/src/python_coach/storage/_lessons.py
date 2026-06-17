@@ -98,6 +98,21 @@ class LessonsMixin:
         """Fetch one exercise by id (without tests)."""
         return await self.session.get(Exercise, exercise_id)
 
+    async def get_exercise_with_translations(self, exercise_id: int) -> Exercise | None:
+        """Fetch one exercise with its translations eagerly loaded.
+
+        Needed where the statement prose is read (e.g. building a hint prompt):
+        a bare ``session.get`` would lazy-load ``translations`` and that fails
+        under async SQLAlchemy.
+        """
+        stmt = (
+            select(Exercise)
+            .where(Exercise.id == exercise_id)
+            .options(selectinload(Exercise.translations))  # type: ignore[arg-type]
+        )
+        result = await self.session.exec(stmt)
+        return result.first()
+
     async def get_exercise_tests(self, exercise_id: int) -> list[ExerciseTest]:
         """All test files for an exercise, ordered for deterministic runs."""
         stmt = (

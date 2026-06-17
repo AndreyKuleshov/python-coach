@@ -19,6 +19,7 @@ dependencies = [
     "structlog>=24.4,<25",
     "argon2-cffi>=23.1,<24",
     "pyjwt>=2.10,<3",
+    "openai>=1.54,<2",
 ]
 
 [dependency-groups]

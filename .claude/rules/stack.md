@@ -51,6 +51,24 @@ If `aiosmtplib` is ever adopted in place of stdlib smtplib, add it here first.
 
 The platform runs **arbitrary user code**, so the runner is isolated, not in-process. Canonical approach: a **Docker** container per submission with CPU / memory / wall-time limits, **no network**, and a non-persistent filesystem. The architect's threat model + isolation mechanism is the authority here; do not run user code in the app process. No alternative sandbox tech (gVisor, firejail, nsjail, etc.) without explicit approval.
 
+## Integrations (AI)
+
+Owner-approved external integration for two optional features: on-the-fly
+**exercise hints** (an approach hint, never the full solution) and a
+**lesson-explanation chat** widget. Both are server-side only.
+
+| Concern | Technology |
+|---|---|
+| LLM provider | **OpenAI** (`openai` SDK) — use the **async** client (`AsyncOpenAI`) so calls never block the event loop |
+| Default model | `gpt-4o-mini`, overridable via `OPENAI_MODEL` |
+| Key handling | `OPENAI_API_KEY` lives ONLY on the server (`services/api/.env`). The browser calls our backend; the backend calls OpenAI. The key is never sent to the client |
+| Graceful disable | When `OPENAI_API_KEY` is empty the AI features are disabled (endpoints return 503 "AI not configured"; the frontend hides the hint buttons + chat widget). Mirrors the SMTP fallback pattern — never crash on a missing key |
+| Test isolation | Tests NEVER call real OpenAI. In-process API tests override the LLM client dependency with a fake; the UI live-server runs the client in an offline/fake mode triggered by `OPENAI_FAKE` |
+
+Prompts are kept server-side. No streaming, conversation history, or rate
+limiting yet — see the deferred list in the feature docs. Switching providers
+(e.g. to Anthropic) or adding those would be a stack change — escalate first.
+
 ## Observability
 
 - **structlog** for structured JSON logs. No `print` in services (see `all-languages.md`).

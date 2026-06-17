@@ -11,6 +11,7 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from python_coach.transport.rest.ai.routes import router as ai_router
 from python_coach.transport.rest.auth.routes import router as auth_router
 from python_coach.transport.rest.lessons.routes import router as lessons_router
 from python_coach.transport.rest.profile.routes import router as profile_router
@@ -42,6 +43,7 @@ def create_app() -> FastAPI:
     app.include_router(submissions_router)
     app.include_router(progress_router)
     app.include_router(profile_router)
+    app.include_router(ai_router)
 
     @app.get("/healthz", tags=["meta"])
     async def healthz() -> dict[str, str]:

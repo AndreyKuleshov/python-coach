@@ -116,6 +116,52 @@ class LessonPage:
             self.page.locator(f"[data-outcome='{outcome}']")
         )
 
+    # --- AI hint locators -------------------------------------------------
+
+    def hint_button(self, exercise_index: int = 0) -> Locator:
+        """The Hint button for the exercise at `exercise_index`."""
+        return self.exercise_item(exercise_index).get_by_test_id("hint-btn")
+
+    def hint_text(self, exercise_index: int = 0) -> Locator:
+        """The hint output paragraph for the exercise at `exercise_index`."""
+        return self.exercise_item(exercise_index).get_by_test_id("hint-text")
+
+    def request_hint(self, exercise_index: int = 0) -> "LessonPage":
+        """Click Hint for the exercise at `exercise_index` and wait for the text."""
+        self.hint_button(exercise_index).click()
+        self.hint_text(exercise_index).wait_for(state="visible")
+        return self
+
+    # --- AI chat-widget locators ------------------------------------------
+
+    @property
+    def chat_toggle(self) -> Locator:
+        """The floating chat widget's open toggle."""
+        return self.page.get_by_test_id("chat-toggle")
+
+    @property
+    def chat_input(self) -> Locator:
+        """The chat excerpt textarea."""
+        return self.page.get_by_test_id("chat-input")
+
+    @property
+    def chat_send(self) -> Locator:
+        """The chat send/explain button."""
+        return self.page.get_by_test_id("chat-send")
+
+    @property
+    def chat_answer(self) -> Locator:
+        """The chat answer area."""
+        return self.page.get_by_test_id("chat-answer")
+
+    def ask_chat(self, excerpt: str) -> "LessonPage":
+        """Open the widget, paste an excerpt, send, and wait for the answer."""
+        self.chat_toggle.click()
+        self.chat_input.fill(excerpt)
+        self.chat_send.click()
+        self.chat_answer.wait_for(state="visible")
+        return self
+
     # --- lesson-level locators -------------------------------------------
 
     @property

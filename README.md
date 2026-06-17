@@ -165,6 +165,26 @@ cp deploy/.env.example deploy/.env
 | `SMTP_USER` / `SMTP_PASSWORD` | SMTP credentials (blank when `SMTP_HOST` is empty) |
 | `SMTP_FROM` | From address, e.g. `no-reply@example.com` |
 | `PUBLIC_BASE_URL` | base URL the confirmation link points at, e.g. `http://localhost:8077` |
+| `OPENAI_API_KEY` | OpenAI key for the AI features (hints + lesson chat). **Leave empty to disable them** — server-side only, never sent to the browser |
+| `OPENAI_MODEL` | chat model, default `gpt-4o-mini` |
+| `OPENAI_FAKE` | `true` runs the LLM client in an offline canned-text mode (no network); used by tests + the UI live-server so no real tokens are spent |
+
+### AI features (optional, OpenAI-backed)
+
+Two auth-gated features call **our backend**, which holds the key and calls
+OpenAI server-side (the key never reaches the client):
+
+- **Exercise hints** — a Hint button on each exercise asks for an *approach*
+  hint (never the full solution) in the active locale (`POST /api/exercises/{id}/hint`).
+  The hidden reference solution is never sent to the model.
+- **Lesson chat** — a floating widget (bottom-right) where you paste a lesson
+  excerpt (+ optional question) for a more detailed explanation in your locale
+  (`POST /api/chat`); it is scoped to explaining the pasted material.
+
+**Graceful disable:** when `OPENAI_API_KEY` is empty the endpoints return
+`503 "AI not configured"` and the frontend hides the hint buttons + chat widget
+(driven by an `ai_enabled` flag on `/api/auth/me`). The app never crashes on a
+missing key — same pattern as the SMTP log-fallback.
 
 `deploy/.env`: `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` /
 `POSTGRES_PORT` (defaults to `5544` to avoid a host Postgres on 5432).

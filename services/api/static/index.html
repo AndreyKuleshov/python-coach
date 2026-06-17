@@ -10,6 +10,8 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js"></script>
     <!-- marked: render lesson markdown without a backend renderer. -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+    <!-- DOMPurify: sanitize AI-generated HTML before innerHTML insertion (self-XSS guard). -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.2.4/purify.min.js"></script>
     <link rel="stylesheet" href="/static/app.css" />
   </head>
   <body>
@@ -128,6 +130,7 @@
          profile.js — profile view; reads app.js's locale helpers + UI catalog. -->
     <script src="/static/i18n.js"></script>
     <script src="/static/auth.js"></script>
+    <script src="/static/ai.js"></script>
     <script src="/static/exercise.js"></script>
     <script src="/static/app.js"></script>
     <script src="/static/profile.js"></script>

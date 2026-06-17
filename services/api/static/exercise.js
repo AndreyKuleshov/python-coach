@@ -61,6 +61,18 @@ window.Coach.Exercise = (function () {
       container.appendChild(_buildBlock(ex, locale));
     }
 
+    // CodeMirror measures editor dimensions on mount. When the textarea is
+    // inside a detached DOM fragment, those dimensions are zero and the
+    // starter code is painted only after the first focus/click (which triggers
+    // an internal refresh). Forcing a refresh in the next animation frame —
+    // after every block is attached to the visible DOM — makes the starter code
+    // appear immediately on load with no user interaction required.
+    requestAnimationFrame(() => {
+      for (const cm of Object.values(_editors)) {
+        cm.refresh();
+      }
+    });
+
     // Fetch progress for every exercise in parallel, then refresh badges.
     await _loadAllProgress();
     _renderProgressCounter();

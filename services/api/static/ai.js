@@ -48,7 +48,18 @@ window.Coach.AI = (function () {
     hintBtn.type = "button";
     hintBtn.className = "hint-btn";
     hintBtn.setAttribute("data-testid", "hint-btn");
-    hintBtn.textContent = window.Coach.t().hint;
+
+    // Icon + bilingual label structure so both light and dark themes render clearly.
+    const icon = document.createElement("span");
+    icon.className = "hint-icon";
+    icon.setAttribute("aria-hidden", "true");
+    icon.textContent = "💡";
+    const label = document.createElement("span");
+    label.className = "hint-label";
+    label.textContent = window.Coach.t().hint;
+    hintBtn.appendChild(icon);
+    hintBtn.appendChild(label);
+
     hintBtn.classList.toggle("hidden", !_enabled);
     controls.appendChild(hintBtn);
 
@@ -62,8 +73,9 @@ window.Coach.AI = (function () {
 
   async function _requestHint(exerciseId, hintBtn, hintOut) {
     hintBtn.disabled = true;
-    const original = window.Coach.t().hint;
-    hintBtn.textContent = window.Coach.t().hintLoading;
+    const labelEl = hintBtn.querySelector(".hint-label");
+    const originalLabel = window.Coach.t().hint;
+    if (labelEl) labelEl.textContent = window.Coach.t().hintLoading;
     hintOut.classList.remove("hidden");
     hintOut.textContent = window.Coach.t().hintLoading;
     try {
@@ -86,7 +98,7 @@ window.Coach.AI = (function () {
       hintOut.textContent = window.Coach.t().hintError;
     } finally {
       hintBtn.disabled = false;
-      hintBtn.textContent = original;
+      if (labelEl) labelEl.textContent = originalLabel;
     }
   }
 
@@ -242,7 +254,10 @@ window.Coach.AI = (function () {
     set("chat-question-label", t.chatQuestionLabel);
     set("chat-send", t.chatSend);
     document.querySelectorAll("[data-testid='hint-btn']").forEach((b) => {
-      if (!b.disabled) b.textContent = t.hint;
+      if (!b.disabled) {
+        const lbl = b.querySelector(".hint-label");
+        if (lbl) lbl.textContent = t.hint;
+      }
     });
   }
 

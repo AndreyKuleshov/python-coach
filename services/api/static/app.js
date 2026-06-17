@@ -236,6 +236,7 @@ function switchLocale(next) {
   window.Coach.renderAuthChrome();
   syncLangChrome();
   if (window.Coach.AI) window.Coach.AI.relocalize();
+  if (window.Coach.Theme) window.Coach.Theme.relocalize();
   // Re-render whichever view is active.
   if (activeView === "lesson") {
     renderProse();
@@ -302,6 +303,16 @@ window.Coach.onLoggedOut = onLoggedOut;
 document.querySelectorAll(".lang-switch button").forEach((b) => {
   b.addEventListener("click", () => switchLocale(b.dataset.locale));
 });
+
+// Wire the theme toggle button; theme.js is loaded before app.js.
+(function () {
+  const btn = document.getElementById("theme-toggle");
+  if (btn && window.Coach.Theme) {
+    // Sync icon/label to the already-applied theme (set by theme.js init).
+    window.Coach.Theme.relocalize();
+    btn.addEventListener("click", () => window.Coach.Theme.toggle());
+  }
+})();
 
 async function boot() {
   syncLangChrome();

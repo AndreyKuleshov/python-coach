@@ -31,3 +31,26 @@ def test_chat_widget_opens_and_answers(lesson_page: LessonPage) -> None:
     expect(lesson_page.chat_toggle).to_be_visible()
     lesson_page.ask_chat("A generator yields values lazily instead of building a list.")
     expect(lesson_page.chat_answer).to_contain_text("offline mode")
+
+
+def test_chat_close_button_hides_panel_and_toggle_reopens(lesson_page: LessonPage) -> None:
+    """Close button collapses the panel; the toggle button re-expands it symmetrically.
+
+    This was broken because .ai-chat-panel's display:flex overrode the generic
+    .hidden { display:none } rule (equal specificity, later rule wins in CSS).
+    The fix adds .ai-chat-panel.hidden { display:none } to raise specificity.
+    """
+    lesson_page.open()
+
+    # Panel is initially hidden; open it via the toggle.
+    expect(lesson_page.chat_panel).not_to_be_visible()
+    lesson_page.chat_toggle.click()
+    expect(lesson_page.chat_panel).to_be_visible()
+
+    # Click Close — the panel must disappear.
+    lesson_page.chat_close.click()
+    expect(lesson_page.chat_panel).not_to_be_visible()
+
+    # Toggle must re-open the panel (symmetry check).
+    lesson_page.chat_toggle.click()
+    expect(lesson_page.chat_panel).to_be_visible()

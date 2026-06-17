@@ -4,8 +4,24 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>python-coach</title>
+    <!-- No-flash theme init: apply saved/OS theme before first paint to avoid FOUC.
+         Runs synchronously before any CSS or body content is painted. -->
+    <script>
+      (function () {
+        var stored = localStorage.getItem("python-coach.theme");
+        var theme =
+          stored === "dark" || stored === "light"
+            ? stored
+            : window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches
+              ? "dark"
+              : "light";
+        document.documentElement.setAttribute("data-theme", theme);
+      })();
+    </script>
     <!-- CodeMirror 5 from CDN: minimal editor, no build step (architect MVP choice). -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css" />
+    <!-- CodeMirror material dark theme (pinned 5.65.16): loaded for dark-mode editors. -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/material.min.css" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js"></script>
     <!-- marked: render lesson markdown without a backend renderer. -->
@@ -27,6 +43,20 @@
             <button type="button" id="logout-btn" data-testid="logout-btn">Log out</button>
           </span>
         </span>
+        <!-- Theme toggle: single button cycling light/dark. data-theme-active
+             is updated by theme.js when the user switches. -->
+        <button
+          type="button"
+          id="theme-toggle"
+          class="theme-toggle"
+          data-testid="theme-toggle"
+          data-theme-active="light"
+          aria-label="Switch to dark mode"
+          title="Switch to dark mode"
+        >
+          <span class="theme-toggle-icon" aria-hidden="true">☾</span>
+          <span class="theme-toggle-label">Dark</span>
+        </button>
         <div class="lang-switch" data-testid="lang-switch">
           <button type="button" data-testid="lang-en" data-locale="en">EN</button>
           <button type="button" data-testid="lang-ru" data-locale="ru">RU</button>
@@ -124,10 +154,12 @@
       </section>
     </main>
     <!-- Load order matters:
+         theme.js  — applies saved/OS theme; exposes Coach.Theme for toggle wiring.
          i18n.js   — defines window.Coach.UI (read at app.js module top-level).
          auth.js   — token/auth helpers app.js reads immediately on execution.
          app.js    — list + lesson views; publishes locale helpers for profile.js.
          profile.js — profile view; reads app.js's locale helpers + UI catalog. -->
+    <script src="/static/theme.js"></script>
     <script src="/static/i18n.js"></script>
     <script src="/static/auth.js"></script>
     <script src="/static/ai.js"></script>

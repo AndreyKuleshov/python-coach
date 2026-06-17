@@ -189,10 +189,14 @@ window.Coach.Exercise = (function () {
     // Mount the CodeMirror editor after the block is in the DOM buffer.
     // Defer to after append via a microtask is not needed — CodeMirror can
     // initialise on a detached textarea; the widget replaces it in-place.
+    // Resolve the active CodeMirror theme from the theme module (dark/light).
+    const cmTheme =
+      window.Coach.Theme && window.Coach.Theme.getTheme() === "dark" ? "material" : "default";
     const cm = CodeMirror.fromTextArea(ta, {
       mode: "python",
       lineNumbers: true,
       indentUnit: 4,
+      theme: cmTheme,
     });
     cm.setValue(ex.starter_code || "");
     _editors[ex.id] = cm;
@@ -420,5 +424,10 @@ window.Coach.Exercise = (function () {
     if (badge) _refreshSolvedBadge(badge, exerciseId);
   }
 
-  return { renderExercises, rerenderLocale };
+  // Expose the editors map so theme.js can re-apply the CM theme on toggle.
+  function getEditors() {
+    return _editors;
+  }
+
+  return { renderExercises, rerenderLocale, getEditors };
 })();

@@ -154,6 +154,16 @@ class LessonPage:
         """The chat answer area."""
         return self.page.get_by_test_id("chat-answer")
 
+    @property
+    def chat_panel(self) -> Locator:
+        """The expandable chat panel (hidden when collapsed)."""
+        return self.page.get_by_test_id("chat-panel")
+
+    @property
+    def chat_close(self) -> Locator:
+        """The Close button inside the chat panel header."""
+        return self.page.get_by_test_id("chat-close")
+
     def ask_chat(self, excerpt: str) -> "LessonPage":
         """Open the widget, paste an excerpt, send, and wait for the answer."""
         self.chat_toggle.click()

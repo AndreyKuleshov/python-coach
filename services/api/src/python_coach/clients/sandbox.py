@@ -64,6 +64,16 @@ class SandboxClient:
             for test in tests:
                 (code_dir / test.name).write_text(test.content, encoding="utf-8")
 
+            # The in-container grader runs as an unprivileged uid (10001), but
+            # TemporaryDirectory creates the dir 0700 owned by the API user. Make
+            # the dir traversable and the files readable so the read-only /code
+            # mount is reachable by the sandbox uid. This widens read access to a
+            # dir holding only this submission's own files — it does not touch any
+            # container isolation flag.
+            os.chmod(code_dir, 0o755)
+            for name in os.listdir(code_dir):
+                os.chmod(code_dir / name, 0o644)
+
             return await self._docker_run(code_dir)
 
     async def _docker_run(self, code_dir: Path) -> TestRunResult:

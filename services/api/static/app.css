@@ -170,6 +170,20 @@ label { display: block; font-weight: 600; margin: 12px 0 6px; color: var(--text)
 [data-theme="dark"] .hint-btn { background: #2d2200; color: #ffd55a; border-color: #6e5709; }
 [data-theme="dark"] .hint-btn:hover { background: #3d2f00; border-color: #9e7c0c; }
 .hint-icon { font-size: 16px; line-height: 1; }
+
+/* Reference-solution reveal: separated from the controls row and visually
+   distinct (violet) from the green Check button. */
+.solution-panel { margin-top: 16px; }
+.solution-btn { background: #8250df; color: #fff; border: 0; padding: 6px 14px; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; transition: background .15s; }
+.solution-btn:hover { background: #6f42c1; }
+.solution-btn:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
+[data-theme="dark"] .solution-btn { background: #8957e5; }
+[data-theme="dark"] .solution-btn:hover { background: #a371f7; }
+/* Mirrors the CodeMirror editor's box (full editor width, monospace, bordered),
+   but with brighter colors so the reference solution reads as distinct. */
+.reference-solution { display: block; width: 100%; box-sizing: border-box; margin-top: 10px; min-height: 160px; padding: 12px 14px; border: 1px solid #c5d0db; border-radius: 6px; background: #fbfdff; color: #1f2328; font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace; font-size: 14px; line-height: 1.6; resize: vertical; }
+[data-theme="dark"] .reference-solution { background: #2f3b44; color: #eef6ff; border-color: #8957e5; }
+.reference-solution.hidden { display: none; }
 .hint-text { margin: 10px 0 0; padding: 10px 12px; background: var(--hint-bg); border: 1px solid var(--hint-border); border-radius: 6px; font-size: 14px; white-space: pre-wrap; color: var(--text); }
 
 /* AI floating chat widget */

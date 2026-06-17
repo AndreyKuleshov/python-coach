@@ -12,8 +12,10 @@
 #
 # NOTE: this image runs ONLY the API. It spawns the grading sandbox by calling
 # the host `docker` CLI against a mounted /var/run/docker.sock — the sandbox
-# image (python-coach-sandbox) must already exist on the host. See
-# deploy/COOLIFY_DEPLOY.md for the docker.sock security tradeoff.
+# image (python-coach-sandbox) is built on first start by docker-entrypoint.sh
+# from the /app/sandbox build context shipped below. See
+# deploy/COOLIFY_DEPLOY.md for the docker.sock security tradeoff + the
+# run-as-root socket-access note.
 
 # === builder ================================================================
 FROM python:3.13.1-slim-bookworm AS builder
@@ -64,13 +66,34 @@ COPY --from=builder /app/.venv /app/.venv
 COPY services/api/src /app/src
 COPY services/api/static /app/static
 # pyproject ships ONLY for its [tool.alembic] config (script_location), which the
-# release-step `alembic upgrade head` reads from the cwd. No secrets live here.
+# entrypoint's `alembic upgrade head` reads from the cwd. No secrets live here.
 COPY services/api/pyproject.toml /app/pyproject.toml
 
-USER appuser
+# Sandbox build context: the entrypoint runs `docker build /app/sandbox` on the
+# host (mounted socket) at startup, so the tiny, secret-free sandbox sources
+# must ship inside this image. They are NOT installed/imported by the API.
+COPY services/sandbox /app/sandbox
+
+# Real methodist lessons the entrypoint seeds idempotently on every start.
+# Only lesson_*.json — the placeholder fixture is deliberately excluded (both by
+# the COPY glob and by .dockerignore).
+COPY fixtures/lesson_*.json /app/seed-fixtures/
+
+# Self-provision entrypoint: builds the sandbox image, migrates, seeds, execs uvicorn.
+COPY services/api/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
+# NOTE on user: the entrypoint must drive the host Docker daemon via the mounted
+# /var/run/docker.sock (root:docker on the host). A non-root container cannot
+# open that socket, so this image is run as ROOT in production via
+# custom_docker_run_options (`--user 0`). The socket mount already grants
+# effective host-root to this container, so the trust boundary is unchanged —
+# see deploy/COOLIFY_DEPLOY.md. The non-root `appuser` (uid 10001) remains
+# defined for environments that do not need the socket; the deploy explicitly
+# overrides it. We intentionally do NOT `USER appuser` here.
 
 EXPOSE 8000
 
 # Bind 0.0.0.0 so Traefik (Coolify's proxy) can reach the container. One worker:
 # grading is synchronous and single-user scale; scale via replicas if needed.
-CMD ["uvicorn", "python_coach.app:app", "--host", "0.0.0.0", "--port", "8000"]
+ENTRYPOINT ["docker-entrypoint.sh"]

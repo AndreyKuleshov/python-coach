@@ -10,12 +10,17 @@
 .claude/
 sources/
 docs/
-fixtures/
 dev/
 CURRICULUM.md
 STORAGE_CONTRACT.md
 README.md
 CONTEXT.md
+
+# === Fixtures: ship ONLY the real lesson_*.json (seeded on start), nothing else ===
+# Exclude the whole dir, then re-include the real lessons. The throwaway
+# placeholder stays excluded so the entrypoint seed glob never picks it up.
+fixtures/*
+!fixtures/lesson_*.json
 
 # === VCS + meta ===
 .git/
@@ -26,8 +31,9 @@ CONTEXT.md
 # === Local-dev deploy stack (Postgres compose; not part of the API image) ===
 deploy/
 
-# === The sandbox build context is its own image, not part of the API image ===
-services/sandbox/
+# === Sandbox build context: now SHIPPED into the API image so the entrypoint
+# can `docker build /app/sandbox` on the host at startup. (Previously excluded;
+# kept in-context deliberately. Its sources are tiny and carry no secrets.) ===
 
 # === Secrets / env (only the example may ever be present) ===
 .env

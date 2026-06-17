@@ -25,6 +25,7 @@ def _client(wall_timeout_seconds: int = 10) -> SandboxClient:
         sandbox_memory_limit="256m",
         sandbox_cpu_limit="1.0",
         docker_bin="docker",
+        sandbox_work_dir="/tmp",  # noqa: S108 — test-only staging dir, no Docker invoked
         jwt_secret="test-secret",
         jwt_access_token_minutes=60,
         jwt_confirm_token_minutes=60,

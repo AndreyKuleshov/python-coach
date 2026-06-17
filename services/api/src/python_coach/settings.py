@@ -35,6 +35,13 @@ class Settings(BaseSettings):
     sandbox_cpu_limit: str
     # Path to the docker CLI on the host running the API.
     docker_bin: str
+    # Host-shared staging dir for per-submission files. Under docker-out-of-docker
+    # the API container invokes the HOST docker daemon, which resolves the
+    # `-v {dir}:/code:ro` bind-mount on the HOST filesystem. This path must
+    # therefore exist identically on both sides (e.g. a subdir of a directory
+    # mounted at the same path in the container, like /var/run/pcoach-work in prod,
+    # or /tmp in local single-host dev). Required, no default (all-languages.md).
+    sandbox_work_dir: str
 
     # === Auth (JWT) ===
     # HS256 signing secret for access + email-confirmation tokens. Required, no default.

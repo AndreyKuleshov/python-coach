@@ -15,6 +15,7 @@ in-container runner (services/sandbox/runner/run_tests.py).
 import asyncio
 import contextlib
 import json
+import os
 import tempfile
 import uuid
 from dataclasses import dataclass
@@ -51,8 +52,13 @@ class SandboxClient:
 
     async def run(self, solution: SandboxFile, tests: list[SandboxFile]) -> TestRunResult:
         """Grade `solution` against `tests` in an isolated container; never raises on user error."""
-        # Stage files in a host temp dir mounted read-only into the container.
-        with tempfile.TemporaryDirectory(prefix="pcoach-") as tmp:
+        # Stage files in a host-shared dir mounted read-only into the container.
+        # Under docker-out-of-docker the HOST daemon resolves the `-v` bind-mount
+        # on the HOST filesystem, so the staging dir must live under a path that is
+        # identical on the host and inside this container (sandbox_work_dir).
+        work_dir = self._settings.sandbox_work_dir
+        os.makedirs(work_dir, exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix="pcoach-", dir=work_dir) as tmp:
             code_dir = Path(tmp)
             (code_dir / solution.name).write_text(solution.content, encoding="utf-8")
             for test in tests:

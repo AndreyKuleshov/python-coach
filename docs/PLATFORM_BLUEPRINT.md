@@ -20,8 +20,9 @@ end-to-end shape and entities are fixed in [`CONTEXT.md`](../CONTEXT.md).
 **The factory thesis.** The interesting claim of this repo is not the Python
 course — it is that *the platform is a factory for learning platforms*. The
 infrastructure (auth, the Docker grading sandbox, the bilingual content model,
-sequential unlock/completion gating, the profile/progress page, i18n, the layered
-FastAPI service) is **subject-agnostic**. The *only* subject-specific input is the
+sequential unlock/completion gating, the profile/progress page, i18n, the
+dark/light theme toggle, the optional OpenAI hints + chat, the layered FastAPI
+service) is **subject-agnostic** — the full inventory is in §4a. The *only* subject-specific input is the
 books in `sources/`. A `methodist` agent turns those books into
 [`CURRICULUM.md`](../CURRICULUM.md) (a topic map) plus bilingual lesson fixtures
 in `fixtures/`. To retarget the platform to a different subject you swap the
@@ -179,10 +180,25 @@ process. Each submission runs in a throwaway container.
   unlocked), and totals. `controllers/profile.py` reuses the lessons fold.
 - **SPA frontend + i18n.** Single-page UI in `services/api/static/`:
   `index.html`, `app.js`, `auth.js`, `exercise.js`, `profile.js`, `ai.js`,
-  `i18n.js`, `app.css`, using CDN CodeMirror 5 + `marked` (no build step). A
-  backend SPA catch-all serves the shell for client-side routes
+  `theme.js`, `i18n.js`, `app.css`, using CDN CodeMirror 5 + `marked` (no build
+  step). A backend SPA catch-all serves the shell for client-side routes
   (`/lessons`, `/profile`); the JS gates every view behind the token and stashes
-  deep links for post-login return.
+  deep links for post-login return. **Multi-exercise rendering:** `exercise.js`
+  renders *every* exercise of a lesson, each with its own CodeMirror editor,
+  Check button, results panel, and a per-exercise solved badge, plus a lesson
+  "X/N solved" counter (`renderExercises`, one `_editors[ex.id]` per exercise) —
+  not just the first exercise (the bug `docs/bugs/0005` that this fixed was
+  progression-blocking, since completion requires *all* exercises solved).
+- **Dark / light theme toggle.** `static/theme.js` (`window.Coach.Theme`) plus
+  CSS variables in `app.css` (`:root`/`[data-theme="light"]` vs
+  `[data-theme="dark"]`) give a persisted light/dark switch. The default follows
+  `prefers-color-scheme`; an explicit choice is stored in `localStorage` and
+  wins thereafter. An inline no-flash script in `index.html` `<head>` applies the
+  saved/OS theme **before first paint** (no FOUC). CodeMirror is themed too — the
+  toggle swaps every live editor between the pinned `material` (dark) and
+  `default` (light) themes via `applyToAllEditors`. The toggle button
+  (`#theme-toggle`, `data-testid="theme-toggle"`) re-localises its label on
+  language switch. Subject-agnostic.
 - **Optional AI features (external-integration seam).** Two auth-gated,
   OpenAI-backed helpers behind `LLMClient` (`clients/llm.py`, async `AsyncOpenAI`):
   on-the-fly **exercise hints** (approach only, never the solution; obeys the
@@ -196,6 +212,85 @@ process. Each submission runs in a throwaway container.
   OpenAI — the LLM dependency is faked in-process and the UI live-server runs in
   an offline `OPENAI_FAKE` mode. Rate limiting, streaming, and conversation
   history are deferred.
+
+---
+
+## 4a. Feature catalog (the complete shipped feature set)
+
+Every feature currently in the repo, with its key files/endpoints and whether it
+is **subject-agnostic** (inherited free when you swap the books in `sources/`) or
+**subject-specific** (the content itself). Verified against the code in
+`services/api/src/python_coach/` and `services/api/static/`. The goal of this
+section: someone rebuilding "the same platform with all the features it already
+has" for a different subject can use this as the checklist of what they get.
+
+### Authentication
+
+| Feature | Description | Key files / endpoints | Agnostic? |
+|---|---|---|---|
+| Email + password registration | Register with email + password (≥8 chars); creates an **unconfirmed** account. | `POST /api/auth/register`; `controllers/auth.py`, `transport/rest/auth/routes.py`, `storage/_users.py`, `storage/models/user.py` | Subject-agnostic |
+| Argon2 password hashing | Passwords hashed with **Argon2id** (`argon2-cffi`); never stored or logged in plaintext. | `controllers/security.py` (hash/verify); `stack.md` records the owner approval | Subject-agnostic |
+| Email confirmation (SMTP + log-fallback) | A signed, purpose-tagged confirmation **JWT** is emailed; **when `SMTP_HOST` is empty the link is logged** via structlog (`event=email.confirmation_link`) so local dev needs no SMTP creds. Login of an unconfirmed account → 403. | `GET /api/auth/confirm`; `clients/email.py` (stdlib smtplib via `asyncio.to_thread`); `controllers/auth.py` | Subject-agnostic |
+| JWT bearer sessions | Login verifies the hash and issues an **HS256 JWT access token** (`{access_token, token_type, expires_at}`); `GET /api/auth/me` resolves the current user (and reports `ai_enabled`). No token table. | `POST /api/auth/login`, `GET /api/auth/me`; `controllers/security.py` (JWT helpers), `transport/deps.py` (`get_current_user`) | Subject-agnostic |
+
+### Access model
+
+| Feature | Description | Key files / endpoints | Agnostic? |
+|---|---|---|---|
+| All content gated behind login | Every content endpoint (lessons, submissions, progress, profile, AI) requires the bearer token; 401 without it. The only public endpoints are the auth routes. | `transport/deps.py` `CurrentUserDep`; all non-auth routers | Subject-agnostic |
+| Login landing (`/`) | Logged-out visitors see only the inline login/register form on `/`; once authenticated, `/` redirects to the lessons list. | `static/auth.js`, `static/app.js`, `static/index.html` | Subject-agnostic |
+| Lessons list on its own page (`/lessons`) | The lessons list is a distinct authenticated view at `/lessons` (not the landing); a backend SPA catch-all serves the shell so the JS router resolves it. | `app.py` (SPA catch-all); `GET /api/lessons`; `static/app.js` | Subject-agnostic |
+| Deep-link redirect to auth | A logged-out deep link (`/lessons`, `/?lesson=<slug>`, `/profile`) lands on the auth form; the requested path is stashed and restored after login. Any 401 from an authenticated fetch drops back to the auth form. | `static/app.js`, `static/auth.js` | Subject-agnostic |
+
+### Progress & progression
+
+| Feature | Description | Key files / endpoints | Agnostic? |
+|---|---|---|---|
+| Per-user progress | Per-`(user, exercise)` `Progress` row (solved flag, attempt count, last submission, solved-at); each account has its own counters. | `storage/_progress.py`, `storage/models/submission.py`; `GET /api/progress/{exercise_id}` | Subject-agnostic |
+| Lesson completion (derived) | A lesson is **completed** when it has exercises **and** the user has a solved `Progress` row for every one — no stored `is_completed` column. | `controllers/lessons.py` (the completion/unlock fold) | Subject-agnostic |
+| Sequential unlock gating (server-enforced) | Over published lessons ordered by `position`, a lesson is unlocked iff it is first or the previous published lesson is completed; a **locked** lesson read returns **403** and a submission to it returns **403**. The API is the gate; the UI mirrors it. | `controllers/lessons.py`, `controllers/submissions.py`; `GET /api/lessons/{slug}`, `POST /api/submissions` | Subject-agnostic |
+| "Next lesson" flow | The single-lesson read exposes `next_slug` (null on the last) to drive a "Next lesson →" button once the current lesson is completed. | `controllers/lessons.py`; `GET /api/lessons/{slug}`; `static/app.js` | Subject-agnostic |
+| Profile / progress page | `GET /api/profile` (route `/profile`) returns email, an ordered per-lesson status list (`solved/total`, `is_completed`, `is_unlocked`) and totals; reuses the lessons fold (no N+1). UI at `/profile` with an overall progress bar; header email links to it. | `controllers/profile.py`, `transport/rest/profile/routes.py`; `static/profile.js` | Subject-agnostic |
+
+### Content rendering & i18n
+
+| Feature | Description | Key files / endpoints | Agnostic? |
+|---|---|---|---|
+| Multi-exercise lessons | Every exercise of a lesson is rendered with its own CodeMirror editor, Check button, results panel and solved badge, plus a lesson "X/N solved" counter. | `static/exercise.js` (`renderExercises`, `_editors[ex.id]`, `progressOf`) | Subject-agnostic |
+| Bilingual EN/RU content | All learner-facing prose carries both locales in one payload; code-bearing fields are language-neutral. Missing-locale prose falls back rather than erroring. | `storage/models/lesson.py` (translation tables); lesson DTOs | Subject-agnostic infra; the **prose itself is subject-specific** |
+| Instant UI language switcher | A client-side toggle re-renders all prose with no reload/re-fetch; default follows `navigator.language`, a manual choice persists in `localStorage`. | `static/i18n.js`, `static/app.js` | Subject-agnostic |
+| Dark / light theme toggle | Persisted light/dark switch; `prefers-color-scheme` default; no-flash inline init; CodeMirror themed (`material`/`default`). | `static/theme.js`, `static/index.html` (no-flash head script), `app.css` (`data-theme` palettes) | Subject-agnostic |
+
+### AI features (optional, OpenAI-backed, graceful-disable)
+
+| Feature | Description | Key files / endpoints | Agnostic? |
+|---|---|---|---|
+| Per-exercise hints | A Hint button returns an **approach** hint (explicitly *not* the solution) in the UI locale; only the public statement + starter code are sent — hidden `solution_code` is never forwarded. Obeys the lesson-lock gate (403 for locked content). | `POST /api/exercises/{id}/hint`; `controllers/ai.py` (`generate_hint`), `transport/rest/ai/routes.py`, `static/ai.js` | Subject-agnostic |
+| Lesson-explanation chat widget | A floating widget where the learner pastes a lesson excerpt (+ optional question) for a deeper explanation in their locale; scoped to the pasted material, lengths capped to bound token cost. | `POST /api/chat`; `controllers/ai.py` (`explain_excerpt`), `static/ai.js` | Subject-agnostic |
+| Server-side key + graceful disable | The OpenAI key lives only on the server (`AsyncOpenAI` in `clients/llm.py`); when `OPENAI_API_KEY` is empty the endpoints return **503** and the frontend hides hint buttons + chat widget via the `ai_enabled` flag on `/api/auth/me`. Tests never call real OpenAI (in-process fake; UI live-server runs `OPENAI_FAKE`). | `clients/llm.py`, `settings.py`, `GET /api/auth/me` | Subject-agnostic |
+
+### Code execution & grading
+
+| Feature | Description | Key files / endpoints | Agnostic? |
+|---|---|---|---|
+| Docker-isolated sandbox | Each submission runs in a throwaway container: `--network none`, `--read-only`, `--cap-drop ALL`, `--security-opt no-new-privileges`, `--memory`/`--memory-swap` equal, `--cpus`, `--pids-limit`, plus a host-side asyncio wall-clock kill. Full threat model in `README.md`. | `clients/sandbox.py` (`SandboxClient`), `services/sandbox/Dockerfile`, `services/sandbox/runner/run_tests.py` | Agnostic mechanism; the **image + runner are Python-specific** (see §7) |
+| pytest grading | Tests `import` the submission as `solution_module` (default `solution`); the exercise passes only when every collected test passes and ≥1 was collected. | `services/sandbox/runner/run_tests.py`; `controllers/submissions.py` | Mechanism agnostic; "**tests are pytest**" is Python-specific (see §7) |
+| Structured results | The pytest verdict is parsed into `TestResult`/`TestRunResult` dataclasses (not DB tables) and serialized into `Submission.result` (JSONB); rendered in the per-exercise results panel. | `clients/sandbox_result.py`; `static/exercise.js` | Subject-agnostic contract |
+
+### Ops / developer experience
+
+| Feature | Description | Key files / endpoints | Agnostic? |
+|---|---|---|---|
+| `make dev` one-command env | Postgres (compose `--wait`) → Alembic migrate → sandbox image build → seed → uvicorn on `:8077`, each step waited on. | root `Makefile`, `deploy/` | Subject-agnostic |
+| Non-standard ports | API on `:8077`, Postgres on `:5544` to avoid clashing with other local projects (overridable). | `Makefile`, `deploy/.env` | Subject-agnostic |
+| Compose stack | Local Postgres + the sandbox image unified into the deploy compose stack. | `deploy/` (docker-compose) | Subject-agnostic |
+| Seeding / ingest CLI | `seed.py` upserts a lesson by `slug` (re-run-safe); `make api-seed-all` ingests every fixture. | `seed.py`; `make api-seed`, `api-seed-all` | Subject-agnostic tool; the **fixtures it loads are subject-specific** |
+
+**Subject-specific surface, in full:** the books in `sources/`, `CURRICULUM.md`,
+the `fixtures/lesson_*.json` (their prose, starter/solution code, and pytest
+tests), and the goal/target-skill prose in `CONTEXT.md`. Everything else in this
+catalog is inherited automatically on a book-swap (with the one Python grader
+caveat in §7).
 
 ---
 
@@ -259,7 +354,9 @@ journey (oldest → newest):
 | **8. Auth** | `Add email+password authentication with email confirmation and per-user progress` (Argon2, JWT, `user` table + per-user `submission`/`progress`). |
 | **9. Content gating** | `Fix auth-modal login-form visibility…` (→ `docs/bugs/0003`); `Gate all content behind auth: login landing, lessons on /lessons, deep-link redirect`. |
 | **10. Progression / profile** | `Add lesson progression (completion, sequential unlock, next-lesson, profile) + stop tests emailing` (→ `docs/bugs/0004`). |
-| **11. Fixes** | `Render all exercises of a lesson (not just the first)` (→ `docs/bugs/0005`, a progression-blocking UI bug). |
+| **11. Multi-exercise rendering** | `Render all exercises of a lesson (not just the first)` (→ `docs/bugs/0005`, a progression-blocking UI bug — completion needs *all* exercises solved, but the UI only showed the first). |
+| **12. AI features** | `Add OpenAI-backed exercise hints and a floating lesson-chat widget` — `clients/llm.py` (`AsyncOpenAI`), `controllers/ai.py`, `transport/rest/ai/`, `static/ai.js`; the second external-integration seam with the same graceful-disable pattern as SMTP. |
+| **13. Theme + polish** | `Add dark/light theme toggle, make the Hint button visible, fix chat Close` — `static/theme.js`, `data-theme` CSS palettes, no-flash head script, CodeMirror theming; plus `Fix CodeMirror starter code not visible until the editor is clicked` (→ `docs/bugs/0006`). |
 
 Note the rhythm: the architect builds the machine once (phase 1), then content
 (methodist) and infra features (architect/coder) interleave, each backed by qa and
@@ -269,27 +366,49 @@ recorded bugs.
 
 ## 7. How to build a NEW learning platform with this scheme
 
-The playbook to retarget the factory to a different subject:
+**You inherit the entire §4a feature catalog automatically.** Everything marked
+*subject-agnostic* there — email+password registration, Argon2 hashing, email
+confirmation with SMTP-or-log fallback, JWT bearer sessions, login-gated access
+with deep-link redirect, per-user progress, derived lesson completion,
+server-enforced sequential unlock, the "next lesson" flow, the profile/progress
+page, multi-exercise rendering, the bilingual content *model*, the instant
+language switcher, the dark/light theme toggle, the optional OpenAI hints + chat
+widget (graceful-disable), the Docker-isolated execution sandbox, structured
+grading results, and the `make dev`/compose/seeding ops — comes with the infra.
+The integrator does **not** rebuild any of it. The retarget work is *only* the
+content seam plus env config:
 
 1. **Drop the new subject's books into `sources/`.** Replace the three PDFs. Note
    each book's license so the methodist knows which are rewordable backbone vs
-   reference-only.
+   reference-only. **This is the primary input** — for a Python subject it is the
+   *only* substantive change.
 2. **Restate the goal in `CONTEXT.md`.** Update the *Goal*, *User profile*, and
    *Target skill* sections to the new subject. The domain-entity table, data flow,
-   auth model, bilingual model, and progression model stay as-is — they are
-   infra, not content.
+   auth model, bilingual model, progression model, AI section, and theme behaviour
+   stay as-is — they are infra, not content.
 3. **Reset and regenerate `CURRICULUM.md`, then run the methodist per topic.**
    Build a fresh topic map from the new books (structure only, respecting
    copyright + the source legend), then invoke the `methodist` agent in waves —
    one lesson per call — to emit bilingual `fixtures/lesson_*.json`. Each lesson
    self-validates (solution passes its tests, a wrong solution fails) before
    emitting. Delete the old fixtures.
-4. **Bring it up.** `make api-install` once, then `make dev` (Postgres → migrate →
+4. **Configure env (the only knobs).** Copy `services/api/.env.example` →
+   `services/api/.env` and `deploy/.env.example` → `deploy/.env`, then set:
+   `DATABASE_URL`/Postgres creds; **`JWT_SECRET`** (required, no default — HS256
+   signing secret) and the token-lifetime minutes; **SMTP** (`SMTP_HOST` +
+   `SMTP_PORT`/`SMTP_USER`/`SMTP_PASSWORD`/`SMTP_FROM` + `PUBLIC_BASE_URL`) — or
+   leave `SMTP_HOST` empty to have confirmation links logged for local dev;
+   **`OPENAI_API_KEY`** optional (leave empty to disable hints + chat;
+   `OPENAI_MODEL`/`OPENAI_FAKE` as needed); and the sandbox knobs
+   (`SANDBOX_IMAGE`, wall-timeout, memory/CPU limits). No code change — these are
+   all read once and frozen by `pydantic-settings`.
+5. **Bring it up.** `make api-install` once, then `make dev` (Postgres → migrate →
    sandbox build → `api-seed-all` → uvicorn on `:8077`). Register, confirm
-   (the link is logged when SMTP is unset), log in.
-5. **The infra needs no change** — *if the taught subject is still Python.* Auth,
-   the sandbox, progression, profile, and i18n are all subject-agnostic and reused
-   verbatim.
+   (the link is logged when SMTP is unset), log in — and the full feature set
+   above is live against the new content.
+
+For a Python subject, steps 2–4 are minutes of editing and step 1 + the methodist
+runs are the real work; **the infra needs no change at all.**
 
 ### Honest reusability assessment — what is reusable as-is vs what needs adaptation
 
@@ -347,7 +466,8 @@ open questions:
 - **Resolved bugs (`docs/bugs/`), all FIXED:** `0001` sandbox timeout proc-kill
   race; `0002` static-dir path off-by-one (frontend unreachable); `0003` auth-modal
   login-form not hidden; `0004` test suite sent real confirmation emails; `0005`
-  lesson rendered only the first exercise (progression-blocking).
+  lesson rendered only the first exercise (progression-blocking); `0006`
+  CodeMirror starter code not visible until the editor was clicked.
 - **Open questions for the owner** (from `README.md` / `CONTEXT.md`): whether hidden-
   test *failures* should reveal the assertion message; wall-clock/memory defaults
   (10s / 256m) tuning; whether exercises ever need third-party libs in the sandbox;

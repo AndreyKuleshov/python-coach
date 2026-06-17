@@ -14,6 +14,8 @@ pytestmark = [pytest.mark.db, pytest.mark.sandbox]
 
 _CORRECT = "def answer():\n    return 42\n"
 _WRONG = "def answer():\n    return 7\n"
+# Deliberately broken: `return x +` is a SyntaxError at parse time.
+_SYNTAX_ERROR = "def answer():\n    return x +\n"
 
 
 @pytest.mark.smoke
@@ -104,6 +106,37 @@ async def test_get_missing_submission_is_404(auth_client: httpx.AsyncClient) -> 
     """An unknown submission id is a 404 (authenticated)."""
     res = await auth_client.get("/api/submissions/2000000000")
     assert res.status_code == 404
+
+
+@pytest.mark.regression
+async def test_syntax_error_in_submission_surfaces_real_error(
+    auth_client: httpx.AsyncClient, seed_exercise: SeededExercise
+) -> None:
+    """A SyntaxError in user code must report the actual error, not 'no tests collected'.
+
+    Before the fix, a collection-phase failure (import error, syntax error in
+    solution.py) was silently discarded and the runner fell into the generic
+    'no tests collected' branch — useless to the learner. After the fix, the
+    collection longrepr is captured via pytest_collectreport and returned as
+    'runner_error' prefixed with 'Your code could not be loaded:'.
+    """
+    res = await auth_client.post(
+        "/api/submissions",
+        json={"exercise_id": seed_exercise.exercise_id, "code": _SYNTAX_ERROR},
+    )
+
+    assert res.status_code == 200
+    body = res.json()
+    assert body["passed"] is False
+    runner_error: str = body["runner_error"]
+    # Must NOT return the confusing generic message that implies a framework problem.
+    assert "no tests collected" not in runner_error, (
+        f"Expected a real error message, got: {runner_error!r}"
+    )
+    # Must reference the actual Python error so the learner knows what to fix.
+    assert "SyntaxError" in runner_error or "could not be loaded" in runner_error, (
+        f"Expected SyntaxError / 'could not be loaded' in runner_error, got: {runner_error!r}"
+    )
 
 
 @pytest.mark.regression

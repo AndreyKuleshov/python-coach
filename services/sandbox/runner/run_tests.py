@@ -29,6 +29,7 @@ class _Collector:
 
     def __init__(self) -> None:
         self.tests: list[dict[str, object]] = []
+        self.collection_errors: list[str] = []
 
     def pytest_runtest_logreport(self, report: "pytest.TestReport") -> None:
         """Record the call-phase report (plus setup/teardown errors) per test."""
@@ -49,6 +50,13 @@ class _Collector:
                     "message": message,
                 }
             )
+
+    def pytest_collectreport(self, report: "pytest.CollectReport") -> None:
+        """Record collection-phase failures (e.g. SyntaxError in user's solution)."""
+        # Import/syntax errors in the user's file produce a failed collect report
+        # before any test ever runs; we must capture these or they are silently lost.
+        if report.failed:
+            self.collection_errors.append(_shorten(str(report.longrepr)))
 
 
 def _shorten(text: str, limit: int = 4000) -> str:
@@ -80,9 +88,16 @@ def main() -> int:
     )
 
     passed = exit_code == 0 and len(collector.tests) > 0
-    # 0 collected tests usually means a misnamed test file, not a real pass/fail —
-    # surface it as a runner error so the user sees a clear cause, not silent failure.
-    runner_error = "no tests collected (check the test filename)" if not collector.tests else ""
+    # Priority 1: collection errors (SyntaxError / ImportError in user's submission)
+    # must show the actual traceback so the learner can fix their code.
+    # Priority 2: zero tests with no collection error means a misnamed test file.
+    if collector.collection_errors:
+        passed = False
+        runner_error = "Your code could not be loaded:\n" + collector.collection_errors[0]
+    elif not collector.tests:
+        runner_error = "no tests collected (check the test filename)"
+    else:
+        runner_error = ""
     payload = {
         "passed": passed,
         "exit_code": int(exit_code),

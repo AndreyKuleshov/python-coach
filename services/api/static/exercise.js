@@ -7,9 +7,12 @@
 // badge. Each block is self-contained: the Check button posts only that
 // exercise's code and updates only that block's UI.
 //
-// Exposes window.Coach.Exercise.renderExercises(lessonData, solvedIds, locale)
-// and window.Coach.Exercise.rerenderLocale(lessonData, locale) so app.js can
-// call in and locale-switch without rebuilding the DOM tree.
+// Reference-solution reveal (post-solve) is delegated to solution.js to keep
+// this file under the 500-line hard cap.
+//
+// Exposes window.Coach.Exercise.renderExercises(lessonData, slug, authHeaders)
+// and window.Coach.Exercise.rerenderLocale(lessonData) so app.js can call in
+// and locale-switch without rebuilding the DOM tree.
 
 window.Coach = window.Coach || {};
 window.Coach.Exercise = (function () {
@@ -110,6 +113,9 @@ window.Coach.Exercise = (function () {
       const solvedBadge = block.querySelector("[data-testid='solved-badge']");
       if (solvedBadge) _refreshSolvedBadge(solvedBadge, ex.id);
 
+      // Re-translate the reference-solution button label (delegated to solution.js).
+      if (window.Coach.Solution) window.Coach.Solution.rerenderButton(block);
+
       // Re-render results panel summary text if results are showing.
       const resultSummary = block.querySelector("[data-testid='results-summary']");
       if (resultSummary && resultSummary.dataset.passedCount !== undefined) {
@@ -203,6 +209,11 @@ window.Coach.Exercise = (function () {
 
     // Wire the Check button to this block.
     checkBtn.addEventListener("click", () => _check(ex.id, checkBtn, results, solvedBadge));
+
+    // Reference-solution panel (hidden until solved; delegated to solution.js).
+    if (window.Coach.Solution) {
+      block.appendChild(window.Coach.Solution.buildPanel(ex.id, () => _authHeaders()));
+    }
 
     return block;
   }
@@ -403,7 +414,7 @@ window.Coach.Exercise = (function () {
     return localized[locale] || localized.en || localized.ru || "";
   }
 
-  // Update a solved badge by element reference.
+  // Update a solved badge by element reference; also sync the solution button.
   function _refreshSolvedBadge(badgeEl, exerciseId) {
     if (_solved[exerciseId]) {
       badgeEl.textContent = window.Coach.t().solved(1);
@@ -411,6 +422,10 @@ window.Coach.Exercise = (function () {
     } else {
       badgeEl.textContent = "";
       badgeEl.classList.remove("solved-badge-active");
+    }
+    // Keep the solution button visibility in sync (delegated to solution.js).
+    if (window.Coach.Solution) {
+      window.Coach.Solution.refreshButton(exerciseId, Boolean(_solved[exerciseId]));
     }
   }
 

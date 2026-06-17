@@ -116,6 +116,16 @@ class LessonPage:
             self.page.locator(f"[data-outcome='{outcome}']")
         )
 
+    # --- reference-solution locators --------------------------------------
+
+    def show_solution_btn(self, exercise_index: int = 0) -> Locator:
+        """The 'Show reference solution' button for the exercise at `exercise_index`."""
+        return self.exercise_item(exercise_index).get_by_test_id("show-solution-btn")
+
+    def reference_solution(self, exercise_index: int = 0) -> Locator:
+        """The read-only reference-solution textarea for the exercise at `exercise_index`."""
+        return self.exercise_item(exercise_index).get_by_test_id("reference-solution")
+
     # --- AI hint locators -------------------------------------------------
 
     def hint_button(self, exercise_index: int = 0) -> Locator:

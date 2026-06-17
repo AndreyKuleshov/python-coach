@@ -74,6 +74,10 @@ window.Coach.UI = {
     chatSending: "Thinking…",
     chatError: "Could not get an explanation. Try again.",
     chatNeedExcerpt: "Paste a lesson excerpt first.",
+    showSolution: "Show reference solution",
+    hideSolution: "Hide reference solution",
+    solutionLoading: "Loading…",
+    solutionError: "Could not load the reference solution. Try again.",
   },
   ru: {
     editorLabel: "Ваше решение",
@@ -139,5 +143,9 @@ window.Coach.UI = {
     chatSending: "Думаю…",
     chatError: "Не удалось получить объяснение. Попробуйте снова.",
     chatNeedExcerpt: "Сначала вставьте фрагмент урока.",
+    showSolution: "Показать эталонное решение",
+    hideSolution: "Скрыть эталонное решение",
+    solutionLoading: "Загрузка…",
+    solutionError: "Не удалось загрузить эталонное решение. Попробуйте снова.",
   },
 };

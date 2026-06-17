@@ -13,6 +13,7 @@ from fastapi.staticfiles import StaticFiles
 
 from python_coach.transport.rest.ai.routes import router as ai_router
 from python_coach.transport.rest.auth.routes import router as auth_router
+from python_coach.transport.rest.exercises.routes import router as exercises_router
 from python_coach.transport.rest.lessons.routes import router as lessons_router
 from python_coach.transport.rest.profile.routes import router as profile_router
 from python_coach.transport.rest.progress.routes import router as progress_router
@@ -40,6 +41,7 @@ def create_app() -> FastAPI:
 
     app.include_router(auth_router)
     app.include_router(lessons_router)
+    app.include_router(exercises_router)
     app.include_router(submissions_router)
     app.include_router(progress_router)
     app.include_router(profile_router)

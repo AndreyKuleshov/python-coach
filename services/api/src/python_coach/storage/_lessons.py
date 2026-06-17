@@ -138,6 +138,23 @@ class LessonsMixin:
         result = await self.session.exec(stmt)
         return list(result.all())
 
+    async def get_exercise_solution_code(self, exercise_id: int) -> str | None:
+        """Fetch the raw solution_code for one exercise (None when absent/blank).
+
+        Callers are responsible for the authorization check — this storage method
+        returns the value unconditionally so the controller can gate on solved
+        progress before deciding to return or deny it.
+        """
+        exercise = await self.session.get(Exercise, exercise_id)
+        if exercise is None:
+            return None
+        # Treat blank/whitespace-only strings the same as a missing solution so
+        # we never expose an empty field as if it were a real reference solution.
+        code = exercise.solution_code
+        if not code or not code.strip():
+            return None
+        return code
+
     async def exercise_counts_by_lesson(self, user_id: int) -> dict[int, LessonExerciseCounts]:
         """Total + solved exercise counts per lesson for one user, in two queries.
 

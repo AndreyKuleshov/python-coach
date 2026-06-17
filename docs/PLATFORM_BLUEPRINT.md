@@ -49,25 +49,24 @@ entirely by `.claude/rules`.
 | **coder** (`sonnet`) | Generic implementation worker: writes/edits code to spec, mirrors surrounding style, runs lint/typecheck/tests. | Whenever a feature or fix needs writing. | Nothing subject-specific — it has no product vision; it obeys `.claude/rules/*`. Flags (but follows) any rule/user conflict. |
 | **code-reviewer** (`opus`) | Reviews a diff/PR for correctness + rule/layering compliance; also triages existing review comments (validate → apply/reject/clarify → always reply). | Before merge / on PRs. | Read-only for code — proposes fixes and hands off to `coder`; does not edit product files itself. |
 | **qa** (`opus`) | Writes/maintains API tests (pytest + httpx) and UI tests (Playwright + pytest, optional Allure). The test is the oracle of the spec. | After features land; for regression coverage. | Never edits product code to make a test pass (one exception: adding a `data-testid`). Genuine product bugs go to `docs/bugs/` + an `xfail`/`skip`. |
+| **devops** (`opus`) | Packages + deploys ONLY the application; guarantees the harness (agents/rules/refs, `sources/`, `docs/`, plugin) never reaches prod. Owns prod images, deploy/CI config, env/secrets, the deploy `.dockerignore`/build context. | At release / deploy time. | Never ships harness or build-time inputs to prod; never weakens the sandbox isolation; never bakes/commits a secret. |
 
-**The cut that matters.** The architect and methodist are *project-specific* (they
-embody this product's vision and this subject's content). coder/reviewer/qa are
-*generic*: their prompts contain no Python-course knowledge — they only know how to
-read `.claude/rules/*` and execute. That is what makes the bottom three reusable
-across any repo on the same stack.
+**The cut that matters.** The architect plans the end-to-end build (from `CONTEXT.md`
++ `sources/` + this blueprint) and builds infra; the methodist authors content. Those
+two are the *subject-bearing* roles. coder/reviewer/qa/devops are *generic*: their
+prompts contain no subject knowledge — they read `.claude/rules/*` (and the blueprint)
+and execute. That is what makes the harness reusable across any subject on this stack.
 
-**Deferred plugin extraction.** `.claude/PLUGIN_EXTRACTION_PLAN.md` records the
-plan (status: *deferred — do not extract yet*) to promote coder/reviewer/qa + the
-generic rules (`python`, `all-languages`, `docker`, `makefile`, `dotenv`) + the QA
-references into a versioned **Claude Code plugin**, while keeping
-`python-platform-architect`, `methodist`, and the project-contract rules
-(`stack`, `api-layers`) project-local. The mechanism relies on Claude Code's
-override precedence (project `.claude/agents/` wins over plugin agents) and the
-fact that a globally-installed agent reads the *current* project's
-`.claude/rules/`. Known friction (no `${PLUGIN_ROOT}` for agents; the QA refs must
-become a bundled skill) is documented there. The revisit trigger: after one
-successful architect run + at least one methodist lesson + one qa pass with stable
-prompts — which has now happened, so the plan is ready to action when desired.
+**Harness ↔ application split (planned).** `.claude/PLUGIN_EXTRACTION_PLAN.md` records
+the plan to extract the whole **harness** (all six agents + QA-references-as-skill +
+this blueprint, distributed as a Claude Code **plugin**; the generic **rules** delivered
+into each project's `.claude/rules/` via a sync mechanism, since plugins can't ship
+auto-applying rules) into a **separate repo** consumed as a **dev-only dependency**.
+The application repo then holds only its two unique inputs — `sources/` + `CONTEXT.md` —
+plus the agent-built platform, and **deploys without the harness** (plugins live in
+Claude config, never in the image; the devops agent enforces the build-context
+exclusion). The revisit trigger (one architect run + ≥1 methodist lesson + a qa pass
+with stable prompts) is met — extraction proceeds once the harness repo exists.
 
 ---
 
